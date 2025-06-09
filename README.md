@@ -88,6 +88,7 @@ This sophisticated AI-powered system completely automates YouTube video creation
 
 1. **Clone the repository**
 ```bash
+cd ~
 git clone https://github.com/tuvshinorg/AI-YouTube-Video-Generator.git
 cd AI-YouTube-Video-Generator
 ```

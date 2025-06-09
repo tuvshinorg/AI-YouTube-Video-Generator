@@ -303,7 +303,7 @@ Configure AI models in respective scripts:
 
 ### Video Settings
 Customize video parameters in `04.clip.py`:
-- Resolution: 540x960 (vertical format)
+- Resolution: Navite 540x960 Scaled 720x1280 (vertical format)
 - Frame rate: 30 FPS
 - Video codec: H.264
 - Audio codec: AAC

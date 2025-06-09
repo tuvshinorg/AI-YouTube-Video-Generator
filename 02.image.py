@@ -83,12 +83,7 @@ def download_scene_images(seedId):
                 "prompt": sceneImage,
                 "negative_prompt": "nsfw, blurry, low quality, low resolution, cropped, deformed, disfigured, poorly drawn, bad anatomy, wrong anatomy, extra limbs, missing limbs, floating limbs, disconnected limbs, mutation, mutated, ugly, disgusting, amputee, grain, grainy, noisy, jpeg artifacts, watermarks, text, typography, out of frame, cut off, duplicate, error, mutant, poorly rendered, rendering artifacts, poorly rendered hands, poorly rendered face, duplicate heads, poorly rendered fingers, poorly rendered limbs, multiple heads, multiple bodies, too many fingers, fused fingers, bad hands, signature, username, artist name",
                 "override_settings": {
-                    "sd_model_checkpoint": "fluxmania20V320fp16.tzkR.safetensors",
-                    "forge_additional_modules": [
-                        "diffusion_pytorch_model.safetensors",
-                        "t5xxl_fp16.safetensors",
-                        "clipLZeroFP32Restore.UwL9.safetensors",
-                    ],
+                    "sd_model_checkpoint": "fluxmania_V.safetensors",
                     "forge_preset": "flux",
                 },
                 "override_settings_restore_afterwards": False,

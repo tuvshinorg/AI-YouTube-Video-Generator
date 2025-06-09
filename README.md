@@ -120,11 +120,7 @@ cd sd-webui-forge-classic
 
 **Required Model: FluxMania**
 - Download from: https://civitai.com/models/778691?modelVersionId=1539776
-- Place the model file: `fluxmania20V320fp16.tzkR.safetensors` in `models/Stable-diffusion/`
-- Additional required files (place in respective folders):
-  - `diffusion_pytorch_model.safetensors`
-  - `t5xxl_fp16.safetensors` 
-  - `clipLZeroFP32Restore.UwL9.safetensors`
+- Place the model file: `fluxmania_V.safetensors` in `models/Stable-diffusion/`
 
 5. **Setup Ollama**
 ```bash

@@ -9,7 +9,7 @@
 ![AI/ML](https://img.shields.io/badge/AI%2FML-Production%20Ready-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-![Stable Diffusion](https://img.shields.io/badge/Stable%20Diffusion-WebUI%20Forge-purple.svg)
+![Stable Diffusion](https://img.shields.io/badge/Stable%20Diffusion-WebUI%20Forge%20Classic-purple.svg)
 ![Ollama](https://img.shields.io/badge/Ollama-LLaMA%203.2-orange.svg)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-Video%20Processing-red.svg)
 ![YouTube API](https://img.shields.io/badge/YouTube-API%20Integration-red.svg)
@@ -107,10 +107,24 @@ sudo apt install ffmpeg sqlite3
 pip install ffmpeg-normalize
 ```
 
-4. **Setup Stable Diffusion WebUI Forge**
-- Follow installation instructions for Stable Diffusion WebUI Forge
-- Ensure API mode is available
-- Configure model checkpoints
+4. **Setup Stable Diffusion WebUI Forge Classic**
+```bash
+# Clone the Forge Classic repository
+git clone https://github.com/Haoming02/sd-webui-forge-classic.git
+cd sd-webui-forge-classic
+
+# Install dependencies (follow repository instructions)
+# Ensure Python 3.10+ and CUDA are installed
+./webui.sh --api  # Run with API enabled
+```
+
+**Required Model: FluxMania**
+- Download from: https://civitai.com/models/778691?modelVersionId=1539776
+- Place the model file: `fluxmania20V320fp16.tzkR.safetensors` in `models/Stable-diffusion/`
+- Additional required files (place in respective folders):
+  - `diffusion_pytorch_model.safetensors`
+  - `t5xxl_fp16.safetensors` 
+  - `clipLZeroFP32Restore.UwL9.safetensors`
 
 5. **Setup Ollama**
 ```bash
@@ -297,9 +311,11 @@ feeds_to_try = [
 
 ### AI Models
 Configure AI models in respective scripts:
-- Stable Diffusion: Modify model checkpoint in `02.image.py`
-- Ollama: Change model in `01.feed.py` (default: llama3.2:latest)
-- Whisper: Adjust model size in `05.subtitle.py` (default: medium)
+- **Stable Diffusion**: Uses FluxMania model (`fluxmania20V320fp16.tzkR.safetensors`) in `02.image.py`
+- **Ollama**: Change model in `01.feed.py` (default: llama3.2:latest)
+- **Whisper**: Adjust model size in `05.subtitle.py` (default: medium)
+
+**Note**: The FluxMania model is specifically configured for high-quality image generation and is required for optimal results.
 
 ### Video Settings
 Customize video parameters in `04.clip.py`:

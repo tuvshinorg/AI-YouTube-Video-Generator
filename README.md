@@ -127,9 +127,10 @@ pip install ffmpeg-normalize
 git clone https://github.com/Haoming02/sd-webui-forge-classic.git
 cd sd-webui-forge-classic
 
-# Install dependencies (follow repository instructions)
-# Ensure Python 3.10+ and CUDA are installed
-./webui.sh --api  # Run with API enabled
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
 **Required Model: FluxMania**

@@ -244,27 +244,17 @@ python 10.clean.py
 For automated operation, create separate cron jobs optimized for each script's processing time:
 
 ```bash
-# Content generation (2 minutes) - runs every 5 minutes
-*/5 * * * * cd /path/to/project && timeout 2m python 01.feed.py
 
-# Image generation (10 minutes) - runs every 15 minutes  
-*/15 * * * * cd /path/to/project && timeout 10m python 02.image.py
-
-# Voice synthesis (2 minutes) - runs every 5 minutes
-*/5 * * * * cd /path/to/project && timeout 2m python 03.voice.py
-
-# Video processing (2 minutes each) - staggered timing
-*/5 * * * * cd /path/to/project && timeout 2m python 04.clip.py
-1-59/5 * * * * cd /path/to/project && timeout 2m python 05.subtitle.py
-2-59/5 * * * * cd /path/to/project && timeout 2m python 06.transition.py
-
-# Audio and final processing (2 minutes each)
-3-59/5 * * * * cd /path/to/project && timeout 2m python 07.mix.py
-4-59/5 * * * * cd /path/to/project && timeout 2m python 08.final.py
-
-# Upload and cleanup (2 minutes each) - runs every 10 minutes
-*/10 * * * * cd /path/to/project && timeout 2m python 09.upload.py
-5-59/10 * * * * cd /path/to/project && timeout 2m python 10.clean.py
+00 * * * * /path/to/project/venv/bin/python3 01.feed.py 
+05 * * * * /path/to/project/venv/bin/python3 02.image.py
+15 * * * * /path/to/project/venv/bin/python3 03.voice.py
+20 * * * * /path/to/project/venv/bin/python3 04.clip.py
+25 * * * * /path/to/project/venv/bin/python3 05.subtitle.py
+30 * * * * /path/to/project/venv/bin/python3 06.transition.py
+35 * * * * /path/to/project/venv/bin/python3 07.mix.py
+40 * * * * /path/to/project/venv/bin/python3 08.final.py
+45 * * * * /path/to/project/venv/bin/python3 09.upload.py
+50 * * * * /path/to/project/venv/bin/python3 10.clean.py
 ```
 
 **Performance Notes:**

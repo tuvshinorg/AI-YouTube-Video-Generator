@@ -144,7 +144,7 @@ This creates the SQLite database with required tables:
 ### Directory Structure
 The system uses the following directory structure:
 ```
-/root/yikes/
+/root/AI-YouTube-Video-Generator/
 ├── main.db                 # SQLite database
 ├── client_secret.json      # YouTube API credentials
 ├── credentials.storage     # OAuth tokens

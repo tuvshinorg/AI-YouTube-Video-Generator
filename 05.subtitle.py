@@ -18,12 +18,12 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/root/yikes/logs/subtitle.log"),
+        logging.FileHandler("/root/AI-YouTube-Video-Generator/logs/subtitle.log"),
     ],
 )
 
 
-def cleanup_temp_directory(directory="/root/yikes/temp/subtitle/"):
+def cleanup_temp_directory(directory="/root/AI-YouTube-Video-Generator/temp/subtitle/"):
     """
     Remove all files in the specified directory
     """
@@ -47,8 +47,8 @@ def cleanup_temp_directory(directory="/root/yikes/temp/subtitle/"):
 
 def extract_audio(taskId):
     """Extract audio from video file using FFmpeg"""
-    audio_filename = f"/root/yikes/temp/voice/{taskId}/audio.mp3"
-    video_filename = f"/root/yikes/temp/clip/{taskId}/video.mp4"
+    audio_filename = f"/root/AI-YouTube-Video-Generator/temp/voice/{taskId}/audio.mp3"
+    video_filename = f"/root/AI-YouTube-Video-Generator/temp/clip/{taskId}/video.mp4"
 
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(audio_filename), exist_ok=True)
@@ -321,13 +321,13 @@ def main(taskId):
     logging.info(f"Processing taskId: {taskId}")
 
     # Use fixed local video path
-    video_filename = f"/root/yikes/temp/clip/{taskId}/video.mp4"
+    video_filename = f"/root/AI-YouTube-Video-Generator/temp/clip/{taskId}/video.mp4"
     logging.info(f"Using video file: {video_filename}")
 
     # Set output paths
-    json_path = f"/root/yikes/temp/subtitle/{taskId}/data.json"
-    subtitle_path = f"/root/yikes/temp/subtitle/{taskId}/subtitles.ass"
-    output_filename = f"/root/yikes/temp/subtitle/{taskId}/video.mp4"
+    json_path = f"/root/AI-YouTube-Video-Generator/temp/subtitle/{taskId}/data.json"
+    subtitle_path = f"/root/AI-YouTube-Video-Generator/temp/subtitle/{taskId}/subtitles.ass"
+    output_filename = f"/root/AI-YouTube-Video-Generator/temp/subtitle/{taskId}/video.mp4"
 
     # Create directories if they don't exist
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
@@ -355,7 +355,7 @@ def main(taskId):
     create_audiogram_ffmpeg(video_filename, subtitle_path, output_filename)
 
     try:
-        conn = sqlite3.connect("/root/yikes/main.db")
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
         cursor = conn.cursor()
 
         cursor.execute(
@@ -380,7 +380,7 @@ def main(taskId):
 
 if __name__ == "__main__":
     try:
-        conn = sqlite3.connect("/root/yikes/main.db")
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
         cursor = conn.cursor()
 
         cursor.execute(

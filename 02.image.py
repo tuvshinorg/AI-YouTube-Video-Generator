@@ -49,7 +49,7 @@ def download_scene_images(seedId):
         print("Waiting for Stable Diffusion API to start...")
         time.sleep(60)
 
-    conn = sqlite3.connect("/root/yikes/main.db")
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
     cursor = conn.cursor()
 
     cursor.execute(
@@ -75,7 +75,7 @@ def download_scene_images(seedId):
             except subprocess.CalledProcessError:
                 print("No 'ollama' processes found or an error occurred.")
 
-            directory = f"/root/yikes/temp/image/{sceneId}"
+            directory = f"/root/AI-YouTube-Video-Generator/temp/image/{sceneId}"
             os.makedirs(directory, exist_ok=True)
 
             # Construct payload for the Stable Diffusion Web UI API
@@ -156,7 +156,7 @@ def download_scene_images(seedId):
 # download_scene_images()
 if __name__ == "__main__":
     try:
-        conn = sqlite3.connect("/root/yikes/main.db")
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
         cursor = conn.cursor()
 
         cursor.execute(

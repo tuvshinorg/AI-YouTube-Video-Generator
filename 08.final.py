@@ -5,7 +5,7 @@ import sqlite3
 import json
 
 # ============= CONFIGURATION (EDIT THESE PATHS) =============
-LOG_PATH = "/root/yikes/logs/final.log"  # Path for the log file
+LOG_PATH = "/root/AI-YouTube-Video-Generator/logs/final.log"  # Path for the log file
 
 # Configure logging
 logging.basicConfig(
@@ -44,9 +44,9 @@ def get_media_duration(file_path):
 def merge_video_audio(seed_id):
     logger.info(f"Starting video merging process for seed ID: {seed_id}")
     
-    main_video = f"/root/yikes/temp/video/{seed_id}.mp4"
-    audio_path = f"/root/yikes/temp/mix/{seed_id}/{seed_id}.wav"  # Changed from .mp3 to .wav
-    output_path = f"/root/yikes/final/{seed_id}.mp4"
+    main_video = f"/root/AI-YouTube-Video-Generator/temp/video/{seed_id}.mp4"
+    audio_path = f"/root/AI-YouTube-Video-Generator/temp/mix/{seed_id}/{seed_id}.wav"  # Changed from .mp3 to .wav
+    output_path = f"/root/AI-YouTube-Video-Generator/final/{seed_id}.mp4"
 
     # Validate file existence
     for file_path, name in [
@@ -165,7 +165,7 @@ def process_audio(seed_id):
 
         if success:
             # Update the database to mark this seed as processed
-            conn = sqlite3.connect("/root/yikes/main.db")
+            conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
             cursor = conn.cursor()
 
             # Update seedRenderStamp in the database
@@ -194,7 +194,7 @@ def get_pending_seed():
     """
     logger.info("Checking for pending seeds")
     try:
-        conn = sqlite3.connect("/root/yikes/main.db")
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
         cursor = conn.cursor()
 
         cursor.execute(

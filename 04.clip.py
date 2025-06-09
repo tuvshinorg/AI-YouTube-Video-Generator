@@ -12,11 +12,11 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/root/yikes/logs/video.log"),
+        logging.FileHandler("/root/AI-YouTube-Video-Generator/logs/video.log"),
     ],
 )
 
-def cleanup_temp_directory(directory="/root/yikes/temp/image/"):
+def cleanup_temp_directory(directory="/root/AI-YouTube-Video-Generator/temp/image/"):
     """
     Remove all files in the specified directory
     """
@@ -40,7 +40,7 @@ def cleanup_temp_directory(directory="/root/yikes/temp/image/"):
 
 def make_video(seedId):
     # Enable multi-threading for SQLite to improve database operations
-    conn = sqlite3.connect("/root/yikes/main.db", check_same_thread=False)
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db", check_same_thread=False)
     conn.execute(
         "PRAGMA journal_mode = WAL"
     )  # Write-Ahead Logging for better concurrency
@@ -97,19 +97,19 @@ def make_video(seedId):
             sceneId = scene_result[0]
 
             # Create directories for voice and video
-            voice_directory = f"/root/yikes/temp/voice/{sceneId}"
-            video_directory = f"/root/yikes/temp/clip/{sceneId}"
+            voice_directory = f"/root/AI-YouTube-Video-Generator/temp/voice/{sceneId}"
+            video_directory = f"/root/AI-YouTube-Video-Generator/temp/clip/{sceneId}"
             os.makedirs(voice_directory, exist_ok=True)
             os.makedirs(video_directory, exist_ok=True)
 
             # Get image path
-            image_path = f"/root/yikes/temp/image/{sceneId}/image.png"
+            image_path = f"/root/AI-YouTube-Video-Generator/temp/image/{sceneId}/image.png"
             audio_path = os.path.join(voice_directory, "audio.mp3")
             video_output_path = os.path.join(video_directory, "video.mp4")
 
             # Select a random optical flare video from 1.mp4 to 9.mp4
             flare_number = random.randint(1, 9)
-            flare_path = f"/root/yikes/optic/{flare_number}.mp4"
+            flare_path = f"/root/AI-YouTube-Video-Generator/optic/{flare_number}.mp4"
 
             # Apply optical flare effect to image and create video
             if os.path.exists(image_path):
@@ -265,7 +265,7 @@ if __name__ == "__main__":
             logging.info("Using CPU encoding")
 
         # Use optimized connection settings
-        conn = sqlite3.connect("/root/yikes/main.db", check_same_thread=False)
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db", check_same_thread=False)
         conn.execute("PRAGMA journal_mode = WAL")
         conn.execute("PRAGMA synchronous = NORMAL")
         conn.execute("PRAGMA cache_size = -50000")

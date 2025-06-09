@@ -12,18 +12,18 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/root/yikes/logs/mix.log"),
+        logging.FileHandler("/root/AI-YouTube-Video-Generator/logs/mix.log"),
     ],
 )
 
 
 def process_audio(seedId):
     # Define file paths
-    video_file = f"/root/yikes/temp/video/{seedId}.mp4"
-    audio_file = f"/root/yikes/temp/audio/{seedId}.wav"
+    video_file = f"/root/AI-YouTube-Video-Generator/temp/video/{seedId}.mp4"
+    audio_file = f"/root/AI-YouTube-Video-Generator/temp/audio/{seedId}.wav"
     
     # Define seedId-specific mix folder
-    mix_folder = f"/root/yikes/temp/mix/{seedId}"
+    mix_folder = f"/root/AI-YouTube-Video-Generator/temp/mix/{seedId}"
     
     # Check if the seedId mix folder exists, if so remove it
     if os.path.exists(mix_folder):
@@ -43,8 +43,8 @@ def process_audio(seedId):
     
     # Files to remove before starting
     files_to_remove = [
-        f"/root/yikes/temp/mix/{seedId}.wav",
-        f"/root/yikes/temp/audio/{seedId}.wav",
+        f"/root/AI-YouTube-Video-Generator/temp/mix/{seedId}.wav",
+        f"/root/AI-YouTube-Video-Generator/temp/audio/{seedId}.wav",
     ]
 
     # Remove existing output files before starting
@@ -103,7 +103,7 @@ def process_audio(seedId):
 
         # Get the seed song from the database
         try:
-            conn = sqlite3.connect("/root/yikes/main.db")
+            conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
             cursor = conn.cursor()
 
             # Try to get the seedSong path
@@ -129,7 +129,7 @@ def process_audio(seedId):
             # Check for path issues seen in the error log
             if not os.path.exists(seedSong):
                 # Try to find a random mp3 file in the calm directory
-                calm_dir = "/root/yikes/song/calm/"
+                calm_dir = "/root/AI-YouTube-Video-Generator/song/calm/"
                 
                 # Make sure the directory exists
                 if not os.path.exists(calm_dir):
@@ -153,7 +153,7 @@ def process_audio(seedId):
                     seedSong = random_mp3
                 else:
                     # Try to find a default seed song
-                    default_seed_path = "/root/yikes/song/default.wav"
+                    default_seed_path = "/root/AI-YouTube-Video-Generator/song/default.wav"
                     if os.path.exists(default_seed_path):
                         logging.warning(f"Using default seed song: {default_seed_path}")
                         seedSong = default_seed_path
@@ -237,13 +237,13 @@ def process_audio(seedId):
         ], check=True)
         
         # Copy the final output to the standard location
-        shutil.copy(final_output, f"/root/yikes/temp/mix/{seedId}.wav")
-        logging.info(f"Copied final output to standard location: /root/yikes/temp/mix/{seedId}.wav")
+        shutil.copy(final_output, f"/root/AI-YouTube-Video-Generator/temp/mix/{seedId}.wav")
+        logging.info(f"Copied final output to standard location: /root/AI-YouTube-Video-Generator/temp/mix/{seedId}.wav")
 
         print(f"Processing completed successfully. Output: {seedId}.wav")
 
         try:
-            conn = sqlite3.connect("/root/yikes/main.db")
+            conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
             cursor = conn.cursor()
 
             cursor.execute(
@@ -273,7 +273,7 @@ def process_audio(seedId):
 
 if __name__ == "__main__":
     try:
-        conn = sqlite3.connect("/root/yikes/main.db")
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
         cursor = conn.cursor()
 
         cursor.execute(

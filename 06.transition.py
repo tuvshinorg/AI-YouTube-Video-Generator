@@ -20,12 +20,12 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("/root/yikes/logs/transition.log"),
+        logging.FileHandler("/root/AI-YouTube-Video-Generator/logs/transition.log"),
         logging.StreamHandler(),
     ],
 )
 
-def cleanup_temp_directory(directory="/root/yikes/temp/subtitle/"):
+def cleanup_temp_directory(directory="/root/AI-YouTube-Video-Generator/temp/subtitle/"):
     """
     Remove all files in the specified directory
     """
@@ -213,7 +213,7 @@ def create_video_with_transitions(video_paths, output_path):
     if len(video_paths) < 2:
         raise ValueError("At least two videos are required for transitions.")
 
-    temp_base_dir = "/root/yikes/temp/temp"
+    temp_base_dir = "/root/AI-YouTube-Video-Generator/temp/temp"
     if not os.path.exists(temp_base_dir):
         os.makedirs(temp_base_dir, exist_ok=True)
 
@@ -403,7 +403,7 @@ def create_video_with_transitions(video_paths, output_path):
 # Database (liteSQL) Functions
 # ------------------------------
 def get_pending_seeds():
-    conn = sqlite3.connect("/root/yikes/main.db")
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
     try:
         cursor = conn.cursor()
         cursor.execute(
@@ -467,7 +467,7 @@ def main():
         pending_scenes = cursor.fetchall()
 
         for (taskId,) in pending_scenes:
-            video_path = f"/root/yikes/temp/subtitle/{taskId}/video.mp4"
+            video_path = f"/root/AI-YouTube-Video-Generator/temp/subtitle/{taskId}/video.mp4"
             if os.path.exists(video_path):
                 videos.append(video_path)
             else:
@@ -483,7 +483,7 @@ def main():
                 f"At least 2 videos are required, but only {len(videos)} were found"
             )
 
-        output_video = f"/root/yikes/temp/video/{seedId}.mp4"
+        output_video = f"/root/AI-YouTube-Video-Generator/temp/video/{seedId}.mp4"
 
         create_video_with_transitions(video_paths=videos, output_path=output_video)
         # Update seed status after successful processing.

@@ -7,7 +7,7 @@ import sys
 def cleanup_temp_files():
     try:
         # Connect to the database
-        conn = sqlite3.connect("/root/yikes/main.db")
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
         cursor = conn.cursor()
         
         # Find all seeds that have been uploaded
@@ -30,21 +30,21 @@ def cleanup_temp_files():
         # Process each completed seed and its associated tasks
         for seed_id, task_id in completed_items:
             paths_to_remove = [
-                f"/root/yikes/temp/audio/{seed_id}.wav",
-                f"/root/yikes/temp/video/{seed_id}.mp4",
-                f"/root/yikes/temp/mix/{seed_id}.wav",
-                f"/root/yikes/temp/mix/{seed_id}",
-                f"/root/yikes/temp/image/{seed_id}"
+                f"/root/AI-YouTube-Video-Generator/temp/audio/{seed_id}.wav",
+                f"/root/AI-YouTube-Video-Generator/temp/video/{seed_id}.mp4",
+                f"/root/AI-YouTube-Video-Generator/temp/mix/{seed_id}.wav",
+                f"/root/AI-YouTube-Video-Generator/temp/mix/{seed_id}",
+                f"/root/AI-YouTube-Video-Generator/temp/image/{seed_id}"
             ]
             
             # Add task-specific paths if task_id is not None
             if task_id is not None:
                 task_paths = [
-                    f"/root/yikes/temp/clip/{task_id}",
-                    f"/root/yikes/temp/image/{task_id}",
-                    f"/root/yikes/temp/subtitle/{task_id}",
-                    f"/root/yikes/temp/audio/{task_id}",
-                    f"/root/yikes/temp/voice/{task_id}"
+                    f"/root/AI-YouTube-Video-Generator/temp/clip/{task_id}",
+                    f"/root/AI-YouTube-Video-Generator/temp/image/{task_id}",
+                    f"/root/AI-YouTube-Video-Generator/temp/subtitle/{task_id}",
+                    f"/root/AI-YouTube-Video-Generator/temp/audio/{task_id}",
+                    f"/root/AI-YouTube-Video-Generator/temp/voice/{task_id}"
                 ]
                 paths_to_remove.extend(task_paths)
             
@@ -63,7 +63,7 @@ def cleanup_temp_files():
                     print(f"Error removing {path}: {e}")
         
         # Clean up the entire temp/temp directory
-        temp_temp_dir = "/root/yikes/temp/temp/"
+        temp_temp_dir = "/root/AI-YouTube-Video-Generator/temp/temp/"
         try:
             if os.path.exists(temp_temp_dir):
                 # Remove all files in the directory

@@ -41,7 +41,7 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/root/yikes/logs/feed.log"),
+        logging.FileHandler("/root/AI-YouTube-Video-Generator/logs/feed.log"),
     ],
 )
 
@@ -68,7 +68,7 @@ def fetch_snopes_feeds():
 
     print(f"Fetched {len(feed.entries)} entries from RSS feed")
 
-    conn = sqlite3.connect("/root/yikes/main.db")
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
     c = conn.cursor()
     new_entries = 0
 
@@ -182,7 +182,7 @@ def fetch_news_feeds():
         logging.error("All feeds failed to parse properly")
         return False
     
-    conn = sqlite3.connect("/root/yikes/main.db")
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
     c = conn.cursor()
     new_entries = 0
     
@@ -275,7 +275,7 @@ def fetch_news_feeds():
 
 def get_rss_if_not_in_seed():
     """Retrieve the first RSS entry not present in the seed table."""
-    conn = sqlite3.connect("/root/yikes/main.db")
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
     c = conn.cursor()
 
     query = """
@@ -400,7 +400,7 @@ def process_rss_to_seed(rss_array, max_retries=3):
             return
 
         # If we reached here, we have a valid response with 6 scenes
-        conn = sqlite3.connect("/root/yikes/main.db")
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
         cursor = conn.cursor()
 
         try:
@@ -485,7 +485,7 @@ def generate_title_description(rss_array):
         logging.info("No valid RSS entry to process.")
         return
 
-    conn = sqlite3.connect("/root/yikes/main.db")
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
     cursor = conn.cursor()
 
     try:
@@ -589,7 +589,7 @@ def choose_song(rss_array):
         logging.info("No valid RSS entry to process.")
         return
 
-    conn = sqlite3.connect("/root/yikes/main.db")
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
     cursor = conn.cursor()
 
     try:
@@ -634,7 +634,7 @@ def choose_song(rss_array):
 
             print(f"Choose song genre: {song}")
 
-            mp3 = get_random_mp3(f"/root/yikes/song/{song}/")
+            mp3 = get_random_mp3(f"/root/AI-YouTube-Video-Generator/song/{song}/")
 
             # Update the seed table with the generated title and description
             cursor.execute(
@@ -652,7 +652,7 @@ def choose_song(rss_array):
 
         logging.error(f"folder error: {e}")
 
-        mp3 = get_random_mp3(f"/root/yikes/song/calm/")
+        mp3 = get_random_mp3(f"/root/AI-YouTube-Video-Generator/song/calm/")
 
         # Update the seed table with the generated title and description
         cursor.execute(

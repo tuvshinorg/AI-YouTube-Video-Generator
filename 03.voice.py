@@ -12,13 +12,13 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler("/root/yikes/logs/voice.log"),
+        logging.FileHandler("/root/AI-YouTube-Video-Generator/logs/voice.log"),
     ],
 )
 
 
 async def make_text_to_audio(seedId):
-    conn = sqlite3.connect("/root/yikes/main.db")
+    conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
     cursor = conn.cursor()
 
     cursor.execute(
@@ -72,7 +72,7 @@ async def make_text_to_audio(seedId):
         if scene_result:
             sceneId, sceneText = scene_result
 
-            directory = f"/root/yikes/temp/voice/{sceneId}"
+            directory = f"/root/AI-YouTube-Video-Generator/temp/voice/{sceneId}"
             os.makedirs(directory, exist_ok=True)
 
             audio_path = os.path.join(directory, "audio.mp3")
@@ -96,7 +96,7 @@ async def make_text_to_audio(seedId):
 
 if __name__ == "__main__":
     try:
-        conn = sqlite3.connect("/root/yikes/main.db")
+        conn = sqlite3.connect("/root/AI-YouTube-Video-Generator/main.db")
         cursor = conn.cursor()
 
         cursor.execute(

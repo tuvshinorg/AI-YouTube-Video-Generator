@@ -15,12 +15,12 @@ from googleapiclient import discovery
 from datetime import datetime, timedelta
 
 # Configuration constants
-CLIENT_SECRET_FILE = "/root/yikes/client_secret.json"
-CREDENTIALS_STORAGE = "/root/yikes/credentials.storage"
-DATABASE_PATH = "/root/yikes/main.db"
-BASE_VIDEO_PATH = "/root/yikes/final"
+CLIENT_SECRET_FILE = "/root/AI-YouTube-Video-Generator/client_secret.json"
+CREDENTIALS_STORAGE = "/root/AI-YouTube-Video-Generator/credentials.storage"
+DATABASE_PATH = "/root/AI-YouTube-Video-Generator/main.db"
+BASE_VIDEO_PATH = "/root/AI-YouTube-Video-Generator/final"
 SCOPES = ["https://www.googleapis.com/auth/youtube"]
-LOG_FILE = "/root/yikes/logs/upload.log"
+LOG_FILE = "/root/AI-YouTube-Video-Generator/logs/upload.log"
 
 # Configure logging
 logging.basicConfig(
@@ -31,7 +31,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def cleanup_temp_directory(directory="/root/yikes/temp/subtitle/"):
+def cleanup_temp_directory(directory="/root/AI-YouTube-Video-Generator/temp/subtitle/"):
     """
     Remove all files in the specified directory
     """
@@ -241,12 +241,12 @@ if __name__ == "__main__":
     else:
         process_single_video()
 
-    # cleanup_temp_directory("/root/yikes/temp/mix/")
-    # cleanup_temp_directory("/root/yikes/temp/temp/")
-    # cleanup_temp_directory("/root/yikes/temp/final/")
-    # cleanup_temp_directory("/root/yikes/temp/video/")
-    # cleanup_temp_directory("/root/yikes/temp/audio/")
-    # cleanup_temp_directory("/root/yikes/temp/voice/")
-    # cleanup_temp_directory("/root/yikes/temp/image/")
-    # cleanup_temp_directory("/root/yikes/temp/clip/")
-    # cleanup_temp_directory("/root/yikes/temp/subtitle/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/mix/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/temp/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/final/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/video/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/audio/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/voice/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/image/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/clip/")
+    # cleanup_temp_directory("/root/AI-YouTube-Video-Generator/temp/subtitle/")

@@ -1,0 +1,23 @@
+# Core dependencies
+sqlite3-utils
+feedparser
+requests
+beautifulsoup4
+pydantic
+html2text
+
+# AI/ML dependencies
+openai-whisper
+edge-tts
+ollama
+
+# Media processing
+ffmpeg-python
+
+# YouTube integration
+google-api-python-client
+oauth2client
+httplib2
+
+# Additional utilities
+python-dotenv

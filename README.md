@@ -1,8 +1,26 @@
 # AI YouTube Video Generator - Portfolio Project
 
+![GitHub stars](https://img.shields.io/github/stars/tuvshinorg/AI-YouTube-Video-Generator?style=social)
+![GitHub forks](https://img.shields.io/github/forks/tuvshinorg/AI-YouTube-Video-Generator?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/tuvshinorg/AI-YouTube-Video-Generator?style=social)
+
+![GitHub last commit](https://img.shields.io/github/last-commit/tuvshinorg/AI-YouTube-Video-Generator)
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![AI/ML](https://img.shields.io/badge/AI%2FML-Production%20Ready-green.svg)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+
+![Stable Diffusion](https://img.shields.io/badge/Stable%20Diffusion-WebUI%20Forge-purple.svg)
+![Ollama](https://img.shields.io/badge/Ollama-LLaMA%203.2-orange.svg)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-Video%20Processing-red.svg)
+![YouTube API](https://img.shields.io/badge/YouTube-API%20Integration-red.svg)
+![OpenAI Whisper](https://img.shields.io/badge/OpenAI-Whisper-black.svg)
+
 ## 🚀 Looking to Hire a Skilled AI/ML Developer?
 
 **Contact me: tuvshin.org@gmail.com**
+
+[![Portfolio](https://img.shields.io/badge/💼-Available%20for%20Hire-brightgreen.svg?style=for-the-badge)](mailto:tuvshin.org@gmail.com)
+[![Email](https://img.shields.io/badge/Email-tuvshin.org%40gmail.com-red.svg?style=for-the-badge)](mailto:tuvshin.org@gmail.com)
 
 This project demonstrates my expertise in:
 - **Full-Stack AI Development** - Complete automation pipeline from data ingestion to deployment

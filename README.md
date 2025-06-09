@@ -290,16 +290,16 @@ For automated operation, create separate cron jobs optimized for each script's p
 **Note**: Ensure you use the virtual environment Python interpreter for all cron jobs.
 
 ```bash
-0 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 01.feed.py
-5 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 02.image.py
-15 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 03.voice.py
-20 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 04.clip.py
-25 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 05.subtitle.py
-30 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 06.transition.py
-35 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 07.mix.py
-40 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 08.final.py
-45 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 09.upload.py
-50 * * * * cd /root/AI-YouTube-Video-Generator && /root/AI-YouTube-Video-Generator/venv/bin/python 10.clean.py
+0 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 01.feed.py
+5 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 02.image.py
+15 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 03.voice.py
+20 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 04.clip.py
+25 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 05.subtitle.py
+30 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 06.transition.py
+35 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 07.mix.py
+40 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 08.final.py
+45 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 09.upload.py
+50 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 10.clean.py
 ```
 
 **Performance Notes:**

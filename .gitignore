@@ -1,2 +1,38 @@
+# Credentials and secrets
 /client_secret.json
 /credentials.storage
+
+# Database files
+main.db
+
+# Media files (too large for git)
+song/
+optic/
+*.mp4
+*.mp3
+*.wav
+
+# Temporary files
+temp/
+final/
+logs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

@@ -46,6 +46,8 @@ from datetime import datetime, timedelta
 from html import unescape
 
 # Third-party (installed via requirements)
+from dotenv import load_dotenv
+load_dotenv()          # loads .env from CWD or any parent directory
 import feedparser
 import httplib2
 import requests
@@ -72,40 +74,46 @@ import edge_tts
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# CONFIG  ← edit these to match your setup
+# CONFIG  — values come from .env; sensible defaults are provided so the
+#           pipeline works right after `git clone` + `bash setup.sh`.
 # ──────────────────────────────────────────────────────────────────────────────
-BASE_DIR = "/root/AI-YouTube-Video-Generator"
-DB_PATH  = f"{BASE_DIR}/main.db"
-LOG_DIR  = f"{BASE_DIR}/logs"
+# Auto-detect repo root as the directory that contains this script so the
+# project works regardless of where it was cloned.
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR    = os.getenv("BASE_DIR", _SCRIPT_DIR)
+DB_PATH     = f"{BASE_DIR}/main.db"
+LOG_DIR     = f"{BASE_DIR}/logs"
 
-# ── llama.cpp LLM (replaces Ollama) ─────────────────────────────────────────
-# Download any GGUF from HuggingFace, e.g.:
+# ── llama.cpp LLM ─────────────────────────────────────────────────────────────
+# Set LLAMA_MODEL_PATH in .env to your GGUF file.  Download example:
 #   huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
-#       Llama-3.2-3B-Instruct-Q6_K.gguf --local-dir /root/models
-LLAMA_MODEL_PATH = "/root/models/Llama-3.2-3B-Instruct-Q6_K.gguf"
-LLAMA_N_CTX      = 4096   # context window tokens
-LLAMA_N_GPU      = -1     # GPU layers: -1 = all on GPU, 0 = CPU only
-LLAMA_VERBOSE    = False  # set True to see llama.cpp token-by-token output
+#       Llama-3.2-3B-Instruct-Q6_K.gguf --local-dir <BASE_DIR>/models
+LLAMA_MODEL_PATH = os.getenv("LLAMA_MODEL_PATH",
+                             os.path.join(_SCRIPT_DIR, "models",
+                                          "Llama-3.2-3B-Instruct-Q6_K.gguf"))
+LLAMA_N_CTX      = int(os.getenv("LLAMA_N_CTX",  "4096"))
+LLAMA_N_GPU      = int(os.getenv("LLAMA_N_GPU",  "-1"))
+LLAMA_VERBOSE    = os.getenv("LLAMA_VERBOSE", "false").lower() == "true"
 
 # ── Flux / HuggingFace image model ──────────────────────────────────────────
-# Any FLUX-compatible model repo on HuggingFace.  Examples:
-#   "black-forest-labs/FLUX.1-dev"          – official Flux dev build
-#   "black-forest-labs/FLUX.1-schnell"      – faster, fewer steps needed
-#   "enhanceaiteam/Flux-Uncensored-V2"      – uncensored, FluxMania-style
-FLUX_MODEL_ID      = "enhanceaiteam/Flux-Uncensored-V2"
-FLUX_DTYPE         = torch.bfloat16   # bfloat16 saves VRAM on modern GPUs
-FLUX_WIDTH         = 540
-FLUX_HEIGHT        = 960
-FLUX_STEPS         = 20
-FLUX_GUIDANCE      = 3.5              # distilled_cfg_scale equivalent
-FLUX_CPU_OFFLOAD   = True             # set False if you have ≥24 GB VRAM
+# Any FLUX-compatible HuggingFace repo.  Examples:
+#   black-forest-labs/FLUX.1-dev
+#   black-forest-labs/FLUX.1-schnell
+#   enhanceaiteam/Flux-Uncensored-V2
+FLUX_MODEL_ID    = os.getenv("FLUX_MODEL_ID", "enhanceaiteam/Flux-Uncensored-V2")
+FLUX_DTYPE       = torch.bfloat16
+FLUX_WIDTH       = int(os.getenv("FLUX_WIDTH",    "540"))
+FLUX_HEIGHT      = int(os.getenv("FLUX_HEIGHT",   "960"))
+FLUX_STEPS       = int(os.getenv("FLUX_STEPS",    "20"))
+FLUX_GUIDANCE    = float(os.getenv("FLUX_GUIDANCE", "3.5"))
+FLUX_CPU_OFFLOAD = os.getenv("FLUX_CPU_OFFLOAD", "true").lower() == "true"
 
 # ── TTS ──────────────────────────────────────────────────────────────────────
 TTS_VOICE = "en-US-AvaNeural"
 
 # ── YouTube upload ───────────────────────────────────────────────────────────
-CLIENT_SECRET_FILE  = f"{BASE_DIR}/client_secret.json"
-CREDENTIALS_STORAGE = f"{BASE_DIR}/credentials.storage"
+CLIENT_SECRET_FILE  = os.path.join(BASE_DIR, os.getenv("YT_CLIENT_SECRET",  "client_secret.json"))
+CREDENTIALS_STORAGE = os.path.join(BASE_DIR, os.getenv("YT_CREDENTIALS",     "credentials.storage"))
 YOUTUBE_SCOPES      = ["https://www.googleapis.com/auth/youtube"]
 
 # ── Video constants ───────────────────────────────────────────────────────────

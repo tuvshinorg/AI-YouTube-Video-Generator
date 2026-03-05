@@ -2,9 +2,20 @@ import sqlite3
 import os
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed yet during first bootstrap run
+
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_base_dir   = os.getenv("BASE_DIR", _script_dir)
+_db_path    = os.path.join(_base_dir, "main.db")
+
+try:
 
     # Connecting to sqlite (this will create a new database)
-    connection_obj = sqlite3.connect("main.db")
+    connection_obj = sqlite3.connect(_db_path)
+    print(f"Database: {_db_path}")
     cursor_obj = connection_obj.cursor()
 
     # Drop existing tables if they exist

@@ -57,7 +57,7 @@ from googleapiclient.http import MediaFileUpload
 from oauth2client.client import flow_from_clientsecrets
 from oauth2client.file import Storage
 from oauth2client.tools import run_flow
-from ollama import chat
+from llama_cpp import Llama
 from pydantic import BaseModel, ValidationError
 
 # HuggingFace Diffusers for Flux image generation
@@ -77,6 +77,15 @@ import edge_tts
 BASE_DIR = "/root/AI-YouTube-Video-Generator"
 DB_PATH  = f"{BASE_DIR}/main.db"
 LOG_DIR  = f"{BASE_DIR}/logs"
+
+# ── llama.cpp LLM (replaces Ollama) ─────────────────────────────────────────
+# Download any GGUF from HuggingFace, e.g.:
+#   huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
+#       Llama-3.2-3B-Instruct-Q6_K.gguf --local-dir /root/models
+LLAMA_MODEL_PATH = "/root/models/Llama-3.2-3B-Instruct-Q6_K.gguf"
+LLAMA_N_CTX      = 4096   # context window tokens
+LLAMA_N_GPU      = -1     # GPU layers: -1 = all on GPU, 0 = CPU only
+LLAMA_VERBOSE    = False  # set True to see llama.cpp token-by-token output
 
 # ── Flux / HuggingFace image model ──────────────────────────────────────────
 # Any FLUX-compatible model repo on HuggingFace.  Examples:
@@ -172,25 +181,44 @@ def _clean_text(html_text: str) -> str:
     return text.strip()
 
 
-def _ollama_ensure_running() -> bool:
-    """Start ollama if not running. Returns True if we started it (so we stop it later)."""
-    try:
-        subprocess.check_output(["pgrep", "ollama"])
-        return False  # already running
-    except subprocess.CalledProcessError:
-        subprocess.Popen(
-            ["service", "ollama", "start"],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-        log.info("Started ollama service")
-        time.sleep(2)
-        return True  # we started it
+# Module-level LLM cache — loaded once, reused for all feed calls.
+_llm: Llama | None = None
 
 
-def _ollama_stop():
-    subprocess.run(["service", "ollama", "stop"],
-                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    log.info("Stopped ollama service")
+def _get_llm() -> Llama:
+    """Return the llama.cpp model, loading it on first call."""
+    global _llm
+    if _llm is not None:
+        return _llm
+    log.info(f"[llm] Loading model: {LLAMA_MODEL_PATH}")
+    _llm = Llama(
+        model_path=LLAMA_MODEL_PATH,
+        n_ctx=LLAMA_N_CTX,
+        n_gpu_layers=LLAMA_N_GPU,
+        verbose=LLAMA_VERBOSE,
+    )
+    log.info("[llm] Model loaded")
+    return _llm
+
+
+def _llm_chat(prompt: str, schema: dict | None = None,
+              max_tokens: int = 2048, temperature: float = 0.7) -> str:
+    """Send a chat message and return the raw string reply.
+
+    If *schema* is provided the model is constrained to emit valid JSON
+    matching that JSON-Schema (llama.cpp grammar mode).
+    """
+    fmt = {"type": "json_object"}
+    if schema:
+        fmt["schema"] = schema          # llama-cpp-python ≥ 0.2.76
+
+    resp = _get_llm().create_chat_completion(
+        messages=[{"role": "user", "content": prompt}],
+        response_format=fmt if schema else None,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    return resp["choices"][0]["message"]["content"]
 
 
 def feed_fetch_snopes():
@@ -336,17 +364,12 @@ IMPORTANT REQUIREMENTS:
    - Key 'text'  with value as narration text for the scene
 4. The 6th scene MUST be a creative way to say 'subscribe and like our video'
 """
-    started_ollama = _ollama_ensure_running()
     retry, validated = 0, None
 
     while retry < max_retries:
         try:
-            resp = chat(
-                model="llama3.2:latest",
-                messages=[{"role": "user", "content": prompt}],
-                format=SceneList.model_json_schema(),
-            )
-            data = SceneList.model_validate_json(resp.message.content)
+            raw = _llm_chat(prompt, schema=SceneList.model_json_schema())
+            data = SceneList.model_validate_json(raw)
             if len(data.scenes) == 6 and sorted(s.scene for s in data.scenes) == list(range(1, 7)):
                 validated = data
                 break
@@ -358,8 +381,6 @@ IMPORTANT REQUIREMENTS:
 
     if not validated:
         log.error("[feed] Failed to get valid 6-scene response after retries")
-        if started_ollama:
-            _ollama_stop()
         return
 
     conn = sqlite3.connect(DB_PATH)
@@ -397,28 +418,20 @@ IMPORTANT REQUIREMENTS:
     finally:
         conn.close()
 
-    if started_ollama:
-        _ollama_stop()
-
 
 def feed_generate_title_description(rss_entry: dict):
     """Generate YouTube title + description and write to seed table."""
     if not rss_entry:
         return
-    started = _ollama_ensure_running()
     prompt = (
         f"I want YouTube video title and description in JSON format only "
         f"from this text '{rss_entry['rssText']}'. "
         f"Do not include any text or explanations."
     )
     try:
-        resp = chat(
-            "llama3.2:latest",
-            messages=[{"role": "user", "content": prompt}],
-            format=TitleDescriptionResponse.model_json_schema(),
-        )
-        parsed = TitleDescriptionResponse.model_validate_json(resp.message.content)
-        conn = sqlite3.connect(DB_PATH)
+        raw    = _llm_chat(prompt, schema=TitleDescriptionResponse.model_json_schema())
+        parsed = TitleDescriptionResponse.model_validate_json(raw)
+        conn   = sqlite3.connect(DB_PATH)
         conn.execute(
             "UPDATE seed SET seedTitle=?, seedDescription=? WHERE rssId=?",
             (parsed.title, parsed.description, rss_entry["rssId"]),
@@ -428,8 +441,6 @@ def feed_generate_title_description(rss_entry: dict):
         log.info(f"[feed] Title: {parsed.title}")
     except Exception as e:
         log.error(f"[feed] Title/desc error: {e}")
-    if started:
-        _ollama_stop()
 
 
 def feed_choose_song(rss_entry: dict):
@@ -437,19 +448,14 @@ def feed_choose_song(rss_entry: dict):
     if not rss_entry:
         return
     genres = ["bright", "calm", "dark", "dramatic", "funky", "happy", "inspirational", "sad"]
-    started = _ollama_ensure_running()
     genre = "calm"
     try:
         prompt = (
             f"I want YouTube video background music from this text '{rss_entry['rssText']}'. "
             f"Choose one of: {' | '.join(genres)}."
         )
-        resp = chat(
-            "llama3.2",
-            messages=[{"role": "user", "content": prompt}],
-            format=SongResponse.model_json_schema(),
-        )
-        parsed = SongResponse.model_validate_json(resp.message.content)
+        raw    = _llm_chat(prompt, schema=SongResponse.model_json_schema())
+        parsed = SongResponse.model_validate_json(raw)
         if parsed.genre in genres:
             genre = parsed.genre
     except Exception as e:
@@ -464,8 +470,6 @@ def feed_choose_song(rss_entry: dict):
             if os.path.isdir(mp3_dir) else []
     if not mp3_files:
         log.error("[feed] No MP3 files found in song directories")
-        if started:
-            _ollama_stop()
         return
 
     song_path = random.choice(mp3_files)
@@ -474,8 +478,6 @@ def feed_choose_song(rss_entry: dict):
     conn.commit()
     conn.close()
     log.info(f"[feed] Song: {song_path}")
-    if started:
-        _ollama_stop()
 
 
 def run_feed():

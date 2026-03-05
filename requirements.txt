@@ -9,7 +9,12 @@ html2text
 # AI/ML dependencies
 openai-whisper
 edge-tts
-ollama
+# llama-cpp-python for local LLM inference (replaces ollama)
+# Install with CUDA support:
+#   CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --no-cache-dir
+# CPU-only (slow):
+#   pip install llama-cpp-python
+llama-cpp-python
 
 # HuggingFace Flux image generation (replaces Automatic1111/WebUI Forge)
 # Install PyTorch separately first: https://pytorch.org/get-started/locally/

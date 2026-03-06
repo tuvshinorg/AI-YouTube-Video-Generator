@@ -363,6 +363,18 @@ def cmd_queue(_args=None):
         print(dim("  No unprocessed RSS entries."))
 
     print()
+    # Fetch error info too
+    error_map = {}
+    try:
+        err_rows = conn.execute(
+            "SELECT seedId, seedErrorStep, seedErrorMsg FROM SEED WHERE seedErrorStep IS NOT NULL"
+        ).fetchall()
+        for r in err_rows:
+            error_map[r["seedId"]] = (r["seedErrorStep"], r["seedErrorMsg"])
+    except Exception:
+        pass   # column may not exist on old DBs yet
+    conn.close()
+
     if seeds:
         print(f"  {bold('Videos in pipeline')}:")
         print(f"  {'ID':>5}  {'Stage':<18}  {'Created':<20}  Title")
@@ -373,11 +385,18 @@ def cmd_queue(_args=None):
             "mixed":           yellow,
             "transitioned":    yellow,
             "processing":      dim,
+            "error":           red,
         }
         for s in seeds:
-            col   = stage_color.get(s["stage"], str)
+            sid   = s["seedId"]
+            stage = "error" if sid in error_map else s["stage"]
+            col   = stage_color.get(stage, str)
             title = (s["seedTitle"] or "")[:35]
-            print(f"  {s['seedId']:>5}  {col(f\"{s['stage']:<18}\")}  {(s['seedCreatedDate'] or '')[:19]:<20}  {title}")
+            print(f"  {sid:>5}  {col(f'{stage:<18}')}  {(s['seedCreatedDate'] or '')[:19]:<20}  {title}")
+            if sid in error_map:
+                step, msg = error_map[sid]
+                print(f"         {red('↳ failed at:')} {step}  —  {(msg or '')[:60]}")
+                print(f"         {dim('  run: python cli.py retry ' + str(sid) + '  to clear error and re-queue')}")
     else:
         print(dim("  No videos in pipeline yet."))
     print()
@@ -404,6 +423,37 @@ def cmd_run(args=None):
         subprocess.run(cmd, check=False)
     except KeyboardInterrupt:
         print(yellow("\n  Interrupted."))
+
+
+# ── retry ────────────────────────────────────────────────────────────────────
+
+def cmd_retry(args=None):
+    """Clear the error state on a seed so the pipeline will retry it."""
+    print(bold("\n── Retry Failed Video ────────────────────────────────"))
+    seed_id_str = getattr(args, "seed_id", None) if args else None
+    if not seed_id_str:
+        seed_id_str = _prompt("Seed ID to retry")
+    if not str(seed_id_str).isdigit():
+        print(red("  Invalid seed ID."))
+        return
+    seed_id = int(seed_id_str)
+    conn = _db()
+    row = conn.execute("SELECT seedTitle, seedErrorStep FROM SEED WHERE seedId=?", (seed_id,)).fetchone()
+    if not row:
+        print(red(f"  Seed {seed_id} not found."))
+        conn.close()
+        return
+    title, step = row["seedTitle"], row["seedErrorStep"]
+    if not step:
+        print(yellow(f"  Seed {seed_id} has no recorded error."))
+        conn.close()
+        return
+    print(f"  Title: {title}")
+    print(f"  Failed step: {red(step)}")
+    conn.execute("UPDATE SEED SET seedErrorStep=NULL, seedErrorMsg=NULL WHERE seedId=?", (seed_id,))
+    conn.commit()
+    conn.close()
+    print(green(f"  ✔ Error cleared — seed {seed_id} will be retried on next pipeline run."))
 
 
 # ── stop ─────────────────────────────────────────────────────────────────────
@@ -448,9 +498,10 @@ MENU = [
     ("3", "Import from JSON",      cmd_add_json),
     ("4", "Enter text manually",   cmd_add_text),
     ("5", "Show queue",            cmd_queue),
-    ("6", "Run pipeline (api)",    lambda _: cmd_run(type("A", (), {"output": "api"})())),
-    ("7", "Run pipeline (file)",   lambda _: cmd_run(type("A", (), {"output": "file"})())),
-    ("8", "Stop running pipeline", cmd_stop),
+    ("6", "Retry failed video",    cmd_retry),
+    ("7", "Run pipeline (api)",    lambda _: cmd_run(type("A", (), {"output": "api"})())),
+    ("8", "Run pipeline (file)",   lambda _: cmd_run(type("A", (), {"output": "file"})())),
+    ("9", "Stop running pipeline", cmd_stop),
     ("q", "Quit",                  None),
 ]
 
@@ -514,6 +565,9 @@ def main():
     sub.add_parser("queue",      help="Show pipeline queue and status")
     sub.add_parser("stop",       help="Stop a running pipeline process")
 
+    retry_p = sub.add_parser("retry", help="Clear error state on a failed video so it is retried")
+    retry_p.add_argument("seed_id", nargs="?", help="Seed ID to retry (prompted if omitted)")
+
     run_p = sub.add_parser("run", help="Run the full pipeline now")
     run_p.add_argument(
         "--output", "-o",
@@ -534,6 +588,7 @@ def main():
         "add-text":  cmd_add_text,
         "queue":     cmd_queue,
         "run":       cmd_run,
+        "retry":     cmd_retry,
         "stop":      cmd_stop,
     }
 

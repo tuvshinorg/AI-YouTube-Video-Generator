@@ -78,7 +78,9 @@ try:
             seedTransitionStamp TIMESTAMP,
             seedMixStamp TIMESTAMP,
             seedRenderStamp TIMESTAMP,
-            seedUploadStamp TIMESTAMP
+            seedUploadStamp TIMESTAMP,
+            seedErrorStep TEXT DEFAULT NULL,
+            seedErrorMsg  TEXT DEFAULT NULL
         )
     """
     )

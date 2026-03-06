@@ -83,7 +83,7 @@ LOG_FILE="$REPO_DIR/logs/cron.log"
 #   "0 * * * *"   → every hour   (default)
 #   "0 */6 * * *" → every 6 hours
 #   "0 2 * * *"   → daily at 02:00
-CRON_SCHEDULE="0 * * * *"
+CRON_SCHEDULE="* * * * *"
 CRON_CMD="$PYTHON_BIN $PIPELINE >> $LOG_FILE 2>&1"
 CRON_ENTRY="$CRON_SCHEDULE $CRON_CMD"
 CRON_MARKER="# ai-youtube-video-generator"
@@ -131,6 +131,6 @@ echo ""
 echo " Or run the full pipeline once:"
 echo "    python $PIPELINE"
 echo ""
-echo " Cron runs automatically: $CRON_SCHEDULE"
+echo " Cron runs automatically: $CRON_SCHEDULE  (every minute)"
 echo " Cron log: $LOG_FILE"
 echo "════════════════════════════════════════════════════════"

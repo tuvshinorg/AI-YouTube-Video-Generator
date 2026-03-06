@@ -1,182 +1,234 @@
-# AI YouTube Video Generator - Portfolio Project
+# AI YouTube Video Generator
 
 ![GitHub stars](https://img.shields.io/github/stars/tuvshinorg/AI-YouTube-Video-Generator?style=social)
 ![GitHub forks](https://img.shields.io/github/forks/tuvshinorg/AI-YouTube-Video-Generator?style=social)
-![GitHub watchers](https://img.shields.io/github/watchers/tuvshinorg/AI-YouTube-Video-Generator?style=social)
-
 ![GitHub last commit](https://img.shields.io/github/last-commit/tuvshinorg/AI-YouTube-Video-Generator)
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![AI/ML](https://img.shields.io/badge/AI%2FML-Production%20Ready-green.svg)
+![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-![Stable Diffusion](https://img.shields.io/badge/Stable%20Diffusion-WebUI%20Forge%20Classic-purple.svg)
-![Ollama](https://img.shields.io/badge/Ollama-LLaMA%203.2-orange.svg)
+![llama.cpp](https://img.shields.io/badge/llama.cpp-LLaMA%203.2-orange.svg)
+![HuggingFace Flux](https://img.shields.io/badge/HuggingFace-Flux-yellow.svg)
 ![FFmpeg](https://img.shields.io/badge/FFmpeg-Video%20Processing-red.svg)
-![YouTube API](https://img.shields.io/badge/YouTube-API%20Integration-red.svg)
+![YouTube API](https://img.shields.io/badge/YouTube-API%20v3-red.svg)
 ![OpenAI Whisper](https://img.shields.io/badge/OpenAI-Whisper-black.svg)
 
-## 🚀 Looking to Hire a Skilled AI/ML Developer?
+## Looking to Hire a Skilled AI/ML Developer?
 
-**Contact me: tuvshin.org@gmail.com**
+**Contact: tuvshin.org@gmail.com**
 
 [![Portfolio](https://img.shields.io/badge/💼-Available%20for%20Hire-brightgreen.svg?style=for-the-badge)](mailto:tuvshin.org@gmail.com)
-[![Email](https://img.shields.io/badge/Email-tuvshin.org%40gmail.com-red.svg?style=for-the-badge)](mailto:tuvshin.org@gmail.com)
-
-This project demonstrates my expertise in:
-- **Full-Stack AI Development** - Complete automation pipeline from data ingestion to deployment
-- **Machine Learning Integration** - Ollama/LLaMA, Stable Diffusion, Whisper, Edge TTS
-- **Video/Audio Processing** - FFmpeg, complex media manipulation, professional post-production
-- **API Integration** - YouTube Data API, OAuth2, Google Cloud Services
-- **Database Design** - SQLite with optimized performance and concurrency
-- **System Architecture** - Scalable, modular pipeline design
-- **DevOps & Automation** - Production-ready deployment and monitoring
 
 ---
 
-## Project Overview
+## What It Does
 
-This sophisticated AI-powered system completely automates YouTube video creation from RSS feeds to published content. It showcases advanced integration of multiple AI models, media processing technologies, and cloud services in a production-ready pipeline.
+Fully autonomous YouTube Shorts factory. Feed it RSS sources (or type text manually) and it generates, renders, and publishes videos without human intervention:
 
-**Key Achievement**: Built a fully autonomous content creation system that can generate, produce, and publish professional YouTube videos without human intervention.
+```
+RSS / manual text
+      ↓
+  LLM (llama.cpp) → 6 scenes with narration + image prompts
+      ↓
+  Flux (HuggingFace) → AI-generated images per scene
+      ↓
+  Edge TTS → narration audio
+      ↓
+  FFmpeg → clips + subtitles (Whisper) + transitions + music mix
+      ↓
+  YouTube API → published  (or saved .mp4 for manual upload)
+```
 
-## Features
+---
 
-- **Automated Content Generation**: Fetches RSS feeds from news sources (Snopes, Daily Mail)
-- **AI Script Writing**: Uses Ollama/Llama3.2 to generate 6-scene video scripts
-- **Visual Content Creation**: Generates images using Stable Diffusion WebUI Forge
-- **Voice Synthesis**: Creates natural-sounding narration with Microsoft Edge TTS
-- **Video Production**: Combines images, audio, and effects into complete videos
-- **Subtitle Generation**: Word-level subtitle highlighting using Whisper
-- **Background Music**: Automatically selects appropriate music from categorized library
-- **Video Transitions**: Smooth transitions between scenes with various effects
-- **Audio Mixing**: Professional audio processing with echo and EQ
-- **YouTube Upload**: Automated publishing to YouTube with metadata
+## Quick Start (clone → running in one command)
+
+```bash
+git clone https://github.com/tuvshinorg/AI-YouTube-Video-Generator.git
+cd AI-YouTube-Video-Generator
+bash setup.sh
+```
+
+`setup.sh` does everything automatically:
+- Detects your repo path and writes it to `.env`
+- Creates all runtime directories (`logs/`, `temp/*/`, `final/`, `song/*/`, `optic/`, `models/`)
+- Detects CUDA and installs `llama-cpp-python` with GPU support if available
+- Installs all pip dependencies
+- Initialises the SQLite database
+- Installs a cron job (full pipeline every hour by default)
+
+Then fill in two values in `.env`:
+
+```bash
+# .env
+LLAMA_MODEL_PATH=./models/Llama-3.2-3B-Instruct-Q6_K.gguf   # path to your GGUF
+FLUX_MODEL_ID=enhanceaiteam/Flux-Uncensored-V2               # any Flux HF repo
+```
+
+Download a GGUF model (one-time):
+```bash
+huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
+    Llama-3.2-3B-Instruct-Q6_K.gguf --local-dir ./models
+```
+
+---
+
+## Interactive CLI
+
+```bash
+make cli          # or: python cli.py
+```
+
+```
+╔══════════════════════════════════════════╗
+║  AI YouTube Video Generator — Manager   ║
+╚══════════════════════════════════════════╝
+
+  Pipeline: ○ idle   DB: /path/to/main.db
+
+  1)  Add RSS feed
+  2)  Check RSS feeds
+  3)  Import from JSON
+  4)  Enter text manually
+  5)  Show queue
+  6)  Run pipeline (api)       ← upload to YouTube
+  7)  Run pipeline (file)      ← save .mp4 locally
+  8)  Stop running pipeline
+  q)  Quit
+```
+
+CLI subcommands also work for scripting:
+
+```bash
+python cli.py add-rss                  # validate & import an RSS feed
+python cli.py check-rss                # show all RSS groups + entry counts
+python cli.py add-json entries.json    # bulk import from JSON file
+python cli.py add-text                 # paste text, no RSS needed
+python cli.py queue                    # live queue status table
+python cli.py run --output api         # run now, upload to YouTube
+python cli.py run --output file        # run now, save .mp4 for manual upload
+python cli.py stop                     # SIGTERM the running pipeline
+```
+
+### Manual text input
+
+No RSS feed? Just type:
+
+```
+Enter text manually → type or paste → finish with a line containing ---
+```
+
+The pipeline treats it exactly like an RSS article and generates a full video.
+
+### JSON import format
+
+```json
+{
+  "group": "my-source",
+  "entries": [
+    { "title": "Optional title", "text": "Full article body here..." },
+    { "title": "Another one",    "text": "More content..." }
+  ]
+}
+```
+
+---
+
+## Output Modes
+
+| Mode | Command | Result |
+|------|---------|--------|
+| **api** (default) | `make run` | Full pipeline → auto-upload to YouTube |
+| **file** | `make run-file` | Full pipeline → `.mp4` saved in `final/` for manual upload |
+
+The `--output file` mode skips the upload module and prints the path to your finished video.
+
+---
+
+## Make Targets
+
+```
+make setup        first-time install + cron
+make cli          interactive manager
+make run          full pipeline → YouTube upload
+make run-file     full pipeline → save .mp4 locally
+
+make feed         module 01 only: RSS → scenes
+make image        module 02 only: images (Flux)
+make voice        module 03 only: TTS
+make clip         module 04 only: clips
+make subtitle     module 05 only: subtitles (Whisper)
+make transition   module 06 only: transitions
+make mix          module 07 only: music mix
+make final        module 08 only: final render
+make upload       module 09 only: YouTube upload
+make clean        module 10 only: delete temp files
+
+make cron-show    print current crontab
+make cron-remove  remove the pipeline cron entry
+```
+
+---
+
+## Configuration (`.env`)
+
+Copy `.env.example` to `.env` and edit:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `BASE_DIR` | auto-detected | Absolute path to the repo (set automatically by setup.sh) |
+| `LLAMA_MODEL_PATH` | `./models/Llama-3.2-3B-Instruct-Q6_K.gguf` | Path to your GGUF model |
+| `LLAMA_N_CTX` | `4096` | LLM context window (tokens) |
+| `LLAMA_N_GPU` | `-1` | GPU layers: `-1` = all on GPU, `0` = CPU only |
+| `LLAMA_VERBOSE` | `false` | Show llama.cpp token output |
+| `FLUX_MODEL_ID` | `enhanceaiteam/Flux-Uncensored-V2` | Any Flux-compatible HuggingFace repo |
+| `FLUX_CPU_OFFLOAD` | `true` | Offload model to CPU between calls (saves VRAM) |
+| `FLUX_WIDTH` | `540` | Output image width (px) |
+| `FLUX_HEIGHT` | `960` | Output image height (px) |
+| `FLUX_STEPS` | `20` | Diffusion steps |
+| `FLUX_GUIDANCE` | `3.5` | Guidance scale |
+| `TTS_VOICE` | `en-US-AvaNeural` | Edge TTS voice (run `edge-tts --list-voices`) |
+| `YT_CLIENT_SECRET` | `client_secret.json` | YouTube OAuth client secret filename |
+| `YT_CREDENTIALS` | `credentials.storage` | OAuth token storage filename |
+
+---
 
 ## System Requirements
 
-- **Operating System**: Linux (Ubuntu/Debian recommended)
-- **Python**: 3.8+
-- **GPU**: NVIDIA GPU recommended for Stable Diffusion
-- **Storage**: Adequate space for temp files and final videos
-- **Network**: Stable internet connection for RSS feeds and API calls
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| OS | Linux | Ubuntu 22.04+ |
+| Python | 3.10 | 3.11+ |
+| RAM | 16 GB | 32 GB |
+| VRAM | 8 GB | 16 GB+ |
+| Storage | 20 GB free | 50 GB+ |
+| ffmpeg | any | latest |
 
-## Dependencies
+---
 
-### Core Dependencies
-- `sqlite3` - Database management
-- `feedparser` - RSS feed processing
-- `requests` - HTTP requests
-- `beautifulsoup4` - HTML parsing
-- `pydantic` - Data validation
-- `ollama` - Local LLM integration
+## Directory Structure
 
-### AI/ML Dependencies
-- `openai-whisper` - Speech transcription
-- `edge-tts` - Text-to-speech synthesis
-- Stable Diffusion WebUI Forge (external)
-
-### Media Processing
-- `ffmpeg` - Video/audio processing
-- `ffmpeg-normalize` - Audio normalization
-
-### YouTube Integration
-- `google-api-python-client` - YouTube API
-- `oauth2client` - Google OAuth
-- `httplib2` - HTTP client
-
-## Installation
-
-1. **Clone the repository**
-```bash
-cd ~
-git clone https://github.com/tuvshinorg/AI-YouTube-Video-Generator.git
-cd AI-YouTube-Video-Generator
 ```
-
-2. **Create and activate virtual environment**
-```bash
-# Create virtual environment
-python3 -m venv venv
-
-# Activate virtual environment
-# Linux/Mac:
-source venv/bin/activate
-# Windows:
-# venv\Scripts\activate
-```
-
-3. **Install Python dependencies**
-```bash
-# Ensure virtual environment is activated
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-4. **Install system dependencies**
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install ffmpeg sqlite3
-
-# Install ffmpeg-normalize
-pip install ffmpeg-normalize
-```
-
-5. **Setup Stable Diffusion WebUI Forge Classic**
-```bash
-# Clone the Forge Classic repository
-git clone https://github.com/Haoming02/sd-webui-forge-classic.git
-cd sd-webui-forge-classic
-
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-**Required Model: FluxMania**
-- Download from: https://civitai.com/models/778691?modelVersionId=1539776
-- Place the model file: `fluxmania_V.safetensors` in `models/Stable-diffusion/`
-
-6. **Setup Ollama**
-```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Pull required model
-ollama pull llama3.2:latest
-```
-
-7. **Setup YouTube API**
-- Create Google Cloud Project
-- Enable YouTube Data API v3
-- Download client_secret.json
-- Place in project root directory
-
-## Configuration
-
-### Database Setup
-Run the database initialization script:
-```bash
-python create.py
-```
-
-This creates the SQLite database with required tables:
-- `RSS` - RSS feed entries
-- `SEED` - Video project metadata
-- `SCENE` - Individual scene data
-- `TASK` - Processing task tracking
-
-### Directory Structure
-The system uses the following directory structure:
-```
-/root/AI-YouTube-Video-Generator/
-├── main.db                 # SQLite database
-├── client_secret.json      # YouTube API credentials
-├── credentials.storage     # OAuth tokens
-├── logs/                   # Application logs
-├── song/                   # Background music library
-│   ├── bright/
+AI-YouTube-Video-Generator/
+├── pipeline.py          unified pipeline (all 10 modules)
+├── cli.py               interactive CLI manager
+├── create.py            database initialiser
+├── setup.sh             one-shot bootstrap script
+├── Makefile             convenience targets
+├── requirements.txt     pip dependencies
+├── .env.example         config template
+├── .env                 your config (git-ignored)
+├── main.db              SQLite database (git-ignored)
+├── pipeline.lock        runtime lock file (git-ignored)
+├── client_secret.json   YouTube OAuth secret (git-ignored)
+├── credentials.storage  OAuth tokens (git-ignored)
+├── logs/                pipeline logs + cron.log
+├── models/              GGUF model files
+├── song/                background music library
+│   ├── bright/          .mp3 files per mood
 │   ├── calm/
 │   ├── dark/
 │   ├── dramatic/
@@ -184,8 +236,8 @@ The system uses the following directory structure:
 │   ├── happy/
 │   ├── inspirational/
 │   └── sad/
-├── optic/                  # Optical flare effects (1.mp4-9.mp4)
-├── temp/                   # Temporary processing files
+├── optic/               optical flare clips (1.mp4 – 9.mp4)
+├── temp/                intermediate render files (auto-cleaned)
 │   ├── audio/
 │   ├── clip/
 │   ├── image/
@@ -194,217 +246,99 @@ The system uses the following directory structure:
 │   ├── temp/
 │   ├── video/
 │   └── voice/
-└── final/                  # Final video output
+└── final/               finished .mp4 files
 ```
-
-## Usage
-
-The system runs as a pipeline with numbered scripts that should be executed in sequence:
-
-### 1. Content Fetching (`01.feed.py`)
-```bash
-python 01.feed.py
-```
-- Fetches RSS feeds from configured news sources
-- Extracts article content
-- Stores in database
-- Generates video titles, descriptions, and music selection using AI
-
-### 2. Image Generation (`02.image.py`)
-```bash
-python 02.image.py
-```
-- Processes pending scenes
-- Generates images using Stable Diffusion
-- Saves images to temp directory
-
-### 3. Voice Synthesis (`03.voice.py`)
-```bash
-python 03.voice.py
-```
-- Converts scene text to speech
-- Uses Microsoft Edge TTS with female voice (en-US-AvaNeural)
-- Creates audio files for each scene
-
-### 4. Video Clip Creation (`04.clip.py`)
-```bash
-python 04.clip.py
-```
-- Combines images and audio into video clips
-- Adds optical flare effects
-- Applies proper timing and delays
-
-### 5. Subtitle Generation (`05.subtitle.py`)
-```bash
-python 05.subtitle.py
-```
-- Transcribes audio using Whisper
-- Creates word-level subtitle highlighting
-- Burns subtitles into video
-
-### 6. Transition Effects (`06.transition.py`)
-```bash
-python 06.transition.py
-```
-- Combines all scene videos
-- Adds smooth transitions between scenes
-- Creates cohesive full-length video
-
-### 7. Audio Mixing (`07.mix.py`)
-```bash
-python 07.mix.py
-```
-- Extracts audio from video
-- Adds background music
-- Applies audio effects (echo, EQ)
-- Normalizes audio levels
-
-### 8. Final Assembly (`08.final.py`)
-```bash
-python 08.final.py
-```
-- Merges processed video with mixed audio
-- Creates final output video
-- Syncs audio/video timing
-
-### 9. YouTube Upload (`09.upload.py`)
-```bash
-python 09.upload.py
-```
-- Uploads video to YouTube
-- Sets title, description, and metadata
-- Handles authentication and API rate limits
-
-### 10. Cleanup (`10.clean.py`)
-```bash
-python 10.clean.py
-```
-- Removes temporary files for completed uploads
-- Frees up disk space
-- Maintains system performance
-
-## Automation
-
-For automated operation, create separate cron jobs optimized for each script's processing time:
-
-**Note**: Ensure you use the virtual environment Python interpreter for all cron jobs.
-
-```bash
-0 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 01.feed.py
-5 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 02.image.py
-15 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 03.voice.py
-20 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 04.clip.py
-25 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 05.subtitle.py
-30 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 06.transition.py
-35 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 07.mix.py
-40 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 08.final.py
-45 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 09.upload.py
-50 * * * * /root/AI-YouTube-Video-Generator/venv/bin/python 10.clean.py
-```
-
-**Performance Notes:**
-- `02.image.py` (Stable Diffusion): ~10 minutes due to GPU-intensive image generation
-- All other scripts: ~2 minutes each for efficient processing
-- Timeouts prevent hanging processes and ensure system stability
-- Staggered execution prevents resource conflicts
-
-## Configuration Options
-
-### RSS Sources
-Edit `01.feed.py` to modify RSS feed sources:
-```python
-feeds_to_try = [
-    {
-        "url": "https://www.dailymail.co.uk/articles.rss",
-        "name": "dailymailv2",
-        "content_selector": "#content > div.articleWide.cleared > div.alpha"
-    }
-]
-```
-
-### AI Models
-Configure AI models in respective scripts:
-- **Stable Diffusion**: Uses FluxMania model (`fluxmania20V320fp16.tzkR.safetensors`) in `02.image.py`
-- **Ollama**: Change model in `01.feed.py` (default: llama3.2:latest)
-- **Whisper**: Adjust model size in `05.subtitle.py` (default: medium)
-
-**Note**: The FluxMania model is specifically configured for high-quality image generation and is required for optimal results.
-
-### Video Settings
-Customize video parameters in `04.clip.py`:
-- Resolution: Navite 540x960 Scaled 720x1280 (vertical format)
-- Frame rate: 30 FPS
-- Video codec: H.264
-- Audio codec: AAC
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Ollama Service Not Running**
-   - Scripts automatically start/stop Ollama service
-   - Check logs if issues persist
-
-2. **Stable Diffusion API Errors**
-   - Ensure WebUI Forge is running with `--api` flag
-   - Check GPU memory availability
-
-3. **YouTube Upload Failures**
-   - Verify API credentials and quotas
-   - Check OAuth token validity
-
-4. **Database Lock Errors**
-   - Scripts use WAL mode for better concurrency
-   - Ensure proper connection closing
-
-### Log Files
-Monitor logs in `/root/yikes/logs/`:
-- `feed.log` - Content fetching and AI generation
-- `image.log` - Image generation
-- `voice.log` - Voice synthesis
-- `video.log` - Video processing
-- `subtitle.log` - Subtitle generation
-- `transition.log` - Video transitions
-- `mix.log` - Audio mixing
-- `final.log` - Final assembly
-- `upload.log` - YouTube upload
 
 ---
 
-## 💼 About the Developer
+## YouTube API Setup
 
-**Available for hire** - Experienced AI/ML Engineer with proven expertise in:
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project → enable **YouTube Data API v3**
+3. Create OAuth 2.0 credentials (Desktop app)
+4. Download `client_secret.json` → place in repo root
+5. First upload run opens a browser for OAuth consent — token is saved automatically
 
-### Technical Skills Demonstrated:
-- **AI/ML**: PyTorch, TensorFlow, Transformers, Computer Vision, NLP
-- **Languages**: Python, JavaScript, SQL, Bash
-- **Cloud Platforms**: Google Cloud, AWS, API integrations
-- **Media Processing**: FFmpeg, OpenCV, Audio/Video manipulation
-- **Databases**: SQLite, PostgreSQL, MongoDB
-- **DevOps**: Docker, Linux administration, Automation
+---
 
-### Project Highlights:
-- **End-to-End AI Pipeline**: Designed and implemented complete automation workflow
-- **Multi-Modal AI Integration**: Successfully combined text, image, and audio AI models
-- **Production System**: Built robust, scalable system with error handling and logging
-- **API Mastery**: Complex integrations with multiple external services
-- **Performance Optimization**: Efficient resource management and concurrent processing
+## Cron (Automated Scheduling)
 
-### What I Can Bring to Your Team:
-✅ **Rapid Prototyping** - Quick proof-of-concepts to validate ideas  
-✅ **Production-Ready Code** - Scalable, maintainable, well-documented systems  
-✅ **AI Integration Expertise** - Seamless incorporation of cutting-edge AI models  
-✅ **Problem-Solving Skills** - Creative solutions to complex technical challenges  
-✅ **Full-Stack Capability** - From backend APIs to frontend interfaces  
+`setup.sh` installs a cron entry automatically. Default: every hour.
 
-**Ready to discuss your next AI project: tuvshin.org@gmail.com**
+To change the schedule, edit line `CRON_SCHEDULE` in `setup.sh` before running it:
+
+```bash
+CRON_SCHEDULE="0 * * * *"    # every hour (default)
+CRON_SCHEDULE="0 */6 * * *"  # every 6 hours
+CRON_SCHEDULE="0 2 * * *"    # daily at 02:00
+```
+
+The pipeline uses a lock file (`pipeline.lock`) so concurrent cron runs are safely refused.
+
+```bash
+make cron-show      # see installed cron entry
+make cron-remove    # remove it
+```
+
+Cron output goes to `logs/cron.log`.
+
+---
+
+## Pipeline Modules
+
+| # | Module | What it does |
+|---|--------|-------------|
+| 01 | **feed** | Fetches RSS / queued text → LLM generates 6 scenes (narration + image prompt + title + description + music genre) |
+| 02 | **image** | Generates one AI image per scene via HuggingFace Flux |
+| 03 | **voice** | Converts narration to speech via Edge TTS |
+| 04 | **clip** | Combines image + audio + optical flare into a video clip per scene |
+| 05 | **subtitle** | Transcribes audio with Whisper → burns word-level highlighted subtitles |
+| 06 | **transition** | Concatenates scene clips with smooth transitions |
+| 07 | **mix** | Overlays background music (genre chosen by LLM), applies echo/EQ, normalises |
+| 08 | **final** | Merges video + mixed audio → `final/{seedId}.mp4` |
+| 09 | **upload** | Uploads to YouTube with title + description (skipped in `--output file` mode) |
+| 10 | **clean** | Deletes temp files for uploaded videos |
+
+---
+
+## Troubleshooting
+
+**`LLAMA_MODEL_PATH` not found**
+Download a GGUF from HuggingFace and set the path in `.env`.
+
+**Flux out of VRAM**
+Set `FLUX_CPU_OFFLOAD=true` in `.env` (enabled by default), or use a smaller model like `black-forest-labs/FLUX.1-schnell`.
+
+**YouTube upload fails with 403**
+OAuth token expired — delete `credentials.storage` and run `make upload` once to re-authenticate.
+
+**Pipeline already running (lock file)**
+A previous run crashed and left the lock. Use `python cli.py stop` or `rm pipeline.lock`.
+
+**Logs**
+All modules log to `logs/` and to stdout. Cron output goes to `logs/cron.log`.
+
+---
+
+## About the Developer
+
+**Available for hire** — AI/ML Engineer specialising in end-to-end automation pipelines.
+
+**Skills demonstrated in this project:**
+- Local LLM inference with llama.cpp (structured JSON output via Pydantic)
+- HuggingFace diffusers + Flux image generation
+- FFmpeg media processing pipeline (clips, subtitles, transitions, audio mixing)
+- Whisper speech-to-text for word-level subtitle alignment
+- YouTube Data API v3 + OAuth2
+- SQLite pipeline state machine
+- Interactive CLI with menu + subcommands
+- Cron automation with lockfile concurrency control
+- Zero-config clone-to-run setup
+
+**Contact: tuvshin.org@gmail.com**
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Disclaimer
-
-This portfolio project demonstrates technical capabilities. Ensure you have proper rights to use any content sources and comply with relevant terms of service and guidelines.# AI-YouTube-Video-Generator
+MIT License — see LICENSE for details.

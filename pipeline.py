@@ -1407,19 +1407,85 @@ MODULES = {
 }
 
 
-def run_pipeline():
-    """Execute every module in order."""
+LOCK_FILE = os.path.join(BASE_DIR, "pipeline.lock")
+
+
+def _acquire_lock():
+    """Write a lock file containing our PID.  Returns True if acquired."""
+    if os.path.exists(LOCK_FILE):
+        try:
+            pid = int(open(LOCK_FILE).read().strip())
+            os.kill(pid, 0)          # signal 0 = probe only
+            log.warning(f"Pipeline already running (PID {pid}) — lock file: {LOCK_FILE}")
+            return False
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass                     # stale lock — safe to overwrite
+    with open(LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    return True
+
+
+def _release_lock():
+    try:
+        os.remove(LOCK_FILE)
+    except FileNotFoundError:
+        pass
+
+
+def run_pipeline(skip_upload: bool = False):
+    """Execute every module in order.
+
+    Parameters
+    ----------
+    skip_upload : bool
+        When True the 'upload' module is skipped; the final .mp4 is kept in
+        final/ for the user to upload manually.
+    """
+    if not _acquire_lock():
+        log.error("Aborting: another instance is already running.")
+        return
+
     log.info("╔══════════════════════════════════╗")
     log.info("║  AI YouTube Video Generator      ║")
     log.info("║  Full Pipeline Run               ║")
+    if skip_upload:
+        log.info("║  Output mode: file (no upload)   ║")
     log.info("╚══════════════════════════════════╝")
-    for name, fn in MODULES.items():
-        log.info(f"── Running: {name} ──")
-        try:
-            fn()
-        except Exception as e:
-            log.error(f"Module '{name}' raised an exception: {e}", exc_info=True)
-    log.info("Pipeline complete.")
+
+    try:
+        for name, fn in MODULES.items():
+            if skip_upload and name == "upload":
+                log.info("── Skipping: upload (output=file) ──")
+                continue
+            log.info(f"── Running: {name} ──")
+            try:
+                fn()
+            except Exception as e:
+                log.error(f"Module '{name}' raised an exception: {e}", exc_info=True)
+        log.info("Pipeline complete.")
+        if skip_upload:
+            _print_output_files()
+    finally:
+        _release_lock()
+
+
+def _print_output_files():
+    """Log paths of .mp4 files in the final/ directory that are not yet uploaded."""
+    conn = sqlite3.connect(DB_PATH)
+    rows = conn.execute(
+        "SELECT seedId, seedTitle FROM seed WHERE seedUploadStamp='0000-00-00 00:00:00' "
+        "AND seedRenderStamp!='0000-00-00 00:00:00'"
+    ).fetchall()
+    conn.close()
+    if not rows:
+        log.info("[output] No completed videos found.")
+        return
+    log.info("[output] Videos ready for manual upload:")
+    for seed_id, title in rows:
+        path = os.path.join(BASE_DIR, "final", f"{seed_id}.mp4")
+        if os.path.exists(path):
+            log.info(f"  [{seed_id}] {title}")
+            log.info(f"       → {path}")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1438,9 +1504,18 @@ if __name__ == "__main__":
             + "\n".join(f"  {k}" for k in MODULES)
         ),
     )
+    parser.add_argument(
+        "--output", "-o",
+        choices=["api", "file"],
+        default="api",
+        help=(
+            "api  = full pipeline including YouTube upload (default)\n"
+            "file = stop after final render, save .mp4 for manual upload"
+        ),
+    )
     args = parser.parse_args()
 
     if args.module:
         MODULES[args.module]()
     else:
-        run_pipeline()
+        run_pipeline(skip_upload=(args.output == "file"))

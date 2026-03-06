@@ -3,7 +3,7 @@ PIPELINE := pipeline.py
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup run feed image voice clip subtitle transition mix final upload clean cron-show cron-remove
+.PHONY: help setup cli run run-file feed image voice clip subtitle transition mix final upload clean cron-show cron-remove
 
 help:
 	@echo "AI YouTube Video Generator"
@@ -11,8 +11,12 @@ help:
 	@echo "First time:"
 	@echo "  make setup          — install deps, create dirs, init DB, install cron"
 	@echo ""
+	@echo "Management:"
+	@echo "  make cli            — interactive CLI (add RSS, queue, run, stop…)"
+	@echo ""
 	@echo "Pipeline:"
-	@echo "  make run            — run the full pipeline (all 10 modules)"
+	@echo "  make run            — run full pipeline + upload to YouTube"
+	@echo "  make run-file       — run full pipeline, save .mp4 for manual upload"
 	@echo "  make feed           — module 01: fetch RSS → generate scenes"
 	@echo "  make image          — module 02: generate images with Flux"
 	@echo "  make voice          — module 03: text-to-speech"
@@ -31,8 +35,14 @@ help:
 setup:
 	bash setup.sh
 
+cli:
+	$(PYTHON) cli.py
+
 run:
-	$(PYTHON) $(PIPELINE)
+	$(PYTHON) $(PIPELINE) --output api
+
+run-file:
+	$(PYTHON) $(PIPELINE) --output file
 
 feed:
 	$(PYTHON) $(PIPELINE) --module feed

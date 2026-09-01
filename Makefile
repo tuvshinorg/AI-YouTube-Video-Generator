@@ -3,7 +3,7 @@ PIPELINE := pipeline.py
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup cli run run-file feed image voice clip subtitle transition mix final upload clean cron-show cron-remove
+.PHONY: help setup cli api backend-exe run run-file feed image voice clip subtitle transition mix final upload clean cron-show cron-remove
 
 help:
 	@echo "AI YouTube Video Generator"
@@ -13,6 +13,8 @@ help:
 	@echo ""
 	@echo "Management:"
 	@echo "  make cli            — interactive CLI (add RSS, queue, run, stop…)"
+	@echo "  make api            — REST API for the Flutter manager app (dev mode)"
+	@echo "  make backend-exe    — build backend.exe for the Flutter app to spawn"
 	@echo ""
 	@echo "Pipeline:"
 	@echo "  make run            — run full pipeline + upload to YouTube"
@@ -37,6 +39,19 @@ setup:
 
 cli:
 	$(PYTHON) cli.py
+
+api:
+	$(PYTHON) api.py
+
+backend-exe:
+	pyinstaller -y backend.spec
+	rm -rf app/windows/backend
+	mkdir -p app/windows/backend
+	cp -r dist/backend/. app/windows/backend/
+	echo "BASE_DIR=$$(cygpath -w "$(CURDIR)")" > app/windows/backend/.env
+	echo "PYTHON_EXECUTABLE=$$(cygpath -w "$$(command -v python)")" >> app/windows/backend/.env
+	echo "AI_PROVIDER=codex" >> app/windows/backend/.env
+	@echo "backend.exe ready — 'flutter build windows' (or 'flutter run -d windows') in app/ will pick it up"
 
 run:
 	$(PYTHON) $(PIPELINE) --output api

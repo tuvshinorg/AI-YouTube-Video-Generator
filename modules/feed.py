@@ -1,26 +1,18 @@
 from .config import *
 
-import feedparser
-import requests
-from bs4 import BeautifulSoup
-
-
-def _clean_text(html_text: str) -> str:
-    text = re.sub(r"<[^>]+>", "", html_text)
-    text = re.sub(r"http\S+|www\.\S+", "", text)
-    text = re.sub(r"\s+", " ", text)
-    text = unescape(text)
-    text = re.sub(r"^unbfacts:\s*", "", text)
-    return text.strip()
-
 
 def _llm_chat(prompt: str, schema: dict | None = None,
               max_tokens: int = 2048, temperature: float = 0.7) -> str:
     """Send a chat message and return the raw string reply.
 
     If *schema* is provided the model is constrained to emit valid JSON
-    matching that JSON-Schema (llama.cpp grammar mode).
+    matching that JSON-Schema. Routes to Codex CLI or local llama.cpp
+    depending on AI_PROVIDER (modules/config.py).
     """
+    if AI_PROVIDER == "codex":
+        from .codex_provider import codex_chat
+        return codex_chat(prompt, schema=schema)
+
     fmt = {"type": "json_object"}
     if schema:
         fmt["schema"] = schema          # llama-cpp-python ≥ 0.2.76
@@ -34,139 +26,44 @@ def _llm_chat(prompt: str, schema: dict | None = None,
     return resp["choices"][0]["message"]["content"]
 
 
-def feed_fetch_snopes():
-    """Fetch Snopes RSS, parse full article text, insert new rows into RSS table."""
-    log.info("[feed] Fetching Snopes RSS")
-    feed = feedparser.parse("https://www.snopes.com/feed/")
-    if feed.bozo:
-        log.warning(f"[feed] Feed error: {feed.bozo_exception}")
-        return
+def feed_get_unprocessed_entry():
+    """Return the first queued entry not yet turned into a seed, or None.
 
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    new = 0
-    for entry in feed.entries:
-        try:
-            link = entry.get("link")
-            if not link:
-                continue
-            r = requests.get(link, timeout=10)
-            if r.status_code != 200:
-                continue
-            soup = BeautifulSoup(r.text, "html.parser")
-            el = soup.select_one("#article-content")
-            if not el:
-                continue
-            text = _clean_text(el.get_text(strip=True))
-            c.execute("SELECT rssId FROM RSS WHERE rssText = ?", (text,))
-            if c.fetchone():
-                continue
-            published = entry.get("published", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            c.execute(
-                "INSERT INTO RSS (rssGroup, rssText, rssStamp) VALUES (?,?,?)",
-                ("snopes", text, published),
-            )
-            conn.commit()
-            new += 1
-        except Exception as e:
-            log.error(f"[feed] Entry error: {e}")
-    conn.close()
-    log.info(f"[feed] Inserted {new} new Snopes entries")
-
-
-def feed_fetch_news():
-    """Fetch Daily Mail RSS (first 5 items) and insert into RSS table."""
-    log.info("[feed] Fetching news RSS")
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    }
-    try:
-        r = requests.get("https://www.dailymail.co.uk/articles.rss", headers=headers, timeout=10)
-        if r.status_code != 200:
-            log.warning("[feed] Daily Mail feed unavailable")
-            return False
-        feed = feedparser.parse(r.content)
-        if not feed.entries:
-            return False
-    except Exception as e:
-        log.error(f"[feed] News feed error: {e}")
-        return False
-
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    new = 0
-    for entry in feed.entries[:5]:
-        try:
-            link = entry.get("link")
-            if not link:
-                continue
-            ar = requests.get(link, headers=headers, timeout=10)
-            if ar.status_code != 200:
-                continue
-            soup = BeautifulSoup(ar.content, "html.parser")
-            title = entry.get("title", "").strip()
-            content = ""
-            el = soup.select_one("#content > div.articleWide.cleared > div.alpha")
-            if el:
-                content = el.get_text(separator=" ", strip=True)
-            else:
-                for cls in ["content-inner", "entry-content", "article-content", "post-content"]:
-                    el = soup.find(class_=cls)
-                    if el:
-                        content = el.get_text(separator=" ", strip=True)
-                        break
-            if not content:
-                desc = entry.get("description", "") or entry.get("summary", "")
-                content = BeautifulSoup(desc, "html.parser").get_text(separator=" ", strip=True)
-            text = _clean_text(f"{title} {content}")
-            if len(text.strip()) < 20:
-                continue
-            c.execute("SELECT rssId FROM RSS WHERE rssText = ?", (text,))
-            if c.fetchone():
-                continue
-            published = entry.get("published", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-            c.execute(
-                "INSERT INTO RSS (rssGroup, rssText, rssStamp) VALUES (?,?,?)",
-                ("dailymail", text, published),
-            )
-            conn.commit()
-            new += 1
-        except Exception as e:
-            log.error(f"[feed] News entry error: {e}")
-    conn.close()
-    log.info(f"[feed] Inserted {new} new news entries")
-    return new > 0
-
-
-def feed_get_unprocessed_rss():
-    """Return the first RSS entry not yet in the seed table, or None."""
+    Entries are queued manually (Add Text / Import JSON in the app or cli.py)
+    — there is no automatic fetching from any external source.
+    """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
-        SELECT rss.rssId, rss.rssGroup, rss.rssText, rss.rssStamp
-        FROM rss LEFT JOIN seed ON rss.rssId = seed.rssId
-        WHERE seed.rssId IS NULL LIMIT 1
+        SELECT queue.queueId, queue.queueGroup, queue.queueText, queue.queueStamp
+        FROM queue LEFT JOIN seed ON queue.queueId = seed.queueId
+        WHERE seed.queueId IS NULL LIMIT 1
     """)
     row = c.fetchone()
     conn.close()
     if not row:
-        log.info("[feed] No unprocessed RSS entries")
+        log.info("[feed] No unprocessed queue entries")
         return None
-    rss_id, rss_group, rss_text, rss_stamp = row
+    queue_id, queue_group, queue_text, queue_stamp = row
     try:
-        parsed = json.loads(rss_text)
-        rss_text = parsed[:5]
+        parsed = json.loads(queue_text)
+        queue_text = parsed[:5]
     except json.JSONDecodeError:
         pass
-    return {"rssId": rss_id, "rssGroup": rss_group, "rssText": rss_text, "rssStamp": rss_stamp}
+    return {"queueId": queue_id, "queueGroup": queue_group, "queueText": queue_text, "queueStamp": queue_stamp}
 
 
-def feed_process_rss_to_seed(rss_entry: dict, max_retries: int = 3):
-    """Use Ollama/LLaMA to build 6 scenes from the RSS text, insert seed+scene+task rows."""
-    if not rss_entry:
-        return
-    attribute = rss_entry["rssText"]
+def feed_process_entry_to_seed(entry: dict, max_retries: int = 3):
+    """Use Ollama/LLaMA to build 6 scenes from the queued text, insert seed+scene+task rows.
+
+    Returns the new seedId on success, None otherwise. On failure to produce a
+    valid 6-scene response, still inserts a seed row (marked with
+    seedErrorStep='feed') so the entry isn't picked up and retried forever by
+    feed_get_unprocessed_entry(), and so the failure is visible in the app.
+    """
+    if not entry:
+        return None
+    attribute = entry["queueText"]
     prompt = f"""Generate a surprising YouTube video script from this text: '{attribute}'.
 IMPORTANT REQUIREMENTS:
 1. The output MUST have EXACTLY 6 scenes — no more, no less.
@@ -177,7 +74,7 @@ IMPORTANT REQUIREMENTS:
    - Key 'text'  with value as narration text for the scene
 4. The 6th scene MUST be a creative way to say 'subscribe and like our video'
 """
-    retry, validated = 0, None
+    retry, validated, last_error = 0, None, None
 
     while retry < max_retries:
         try:
@@ -186,26 +83,42 @@ IMPORTANT REQUIREMENTS:
             if len(data.scenes) == 6 and sorted(s.scene for s in data.scenes) == list(range(1, 7)):
                 validated = data
                 break
-            log.warning(f"[feed] Got {len(data.scenes)} scenes, expected 6. Retry {retry+1}")
+            last_error = f"Got {len(data.scenes)} scenes, expected 6"
+            log.warning(f"[feed] {last_error}. Retry {retry+1}")
         except Exception as e:
+            last_error = str(e)
             log.error(f"[feed] LLM validation error: {e}")
         retry += 1
         time.sleep(1)
 
-    if not validated:
-        log.error("[feed] Failed to get valid 6-scene response after retries")
-        return
-
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if not validated:
+        log.error("[feed] Failed to get valid 6-scene response after retries")
+        cursor.execute(
+            """INSERT INTO seed
+               (queueId, seedPrompt, seedTitle, seedDescription, seedSong,
+                seedCreatedDate, seedTransitionStamp, seedMixStamp, seedRenderStamp, seedUploadStamp,
+                seedErrorStep, seedErrorMsg)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (entry["queueId"], prompt, "not loaded", "not loaded", "not loaded",
+             now, "0000-00-00 00:00:00", "0000-00-00 00:00:00",
+             "0000-00-00 00:00:00", "0000-00-00 00:00:00",
+             "feed", last_error or "Failed to get a valid 6-scene response after retries"),
+        )
+        conn.commit()
+        conn.close()
+        return None
+
     try:
         cursor.execute(
             """INSERT INTO seed
-               (rssId, seedPrompt, seedTitle, seedDescription, seedSong,
+               (queueId, seedPrompt, seedTitle, seedDescription, seedSong,
                 seedCreatedDate, seedTransitionStamp, seedMixStamp, seedRenderStamp, seedUploadStamp)
                VALUES (?,?,?,?,?,?,?,?,?,?)""",
-            (rss_entry["rssId"], prompt, "not loaded", "not loaded", "not loaded",
+            (entry["queueId"], prompt, "not loaded", "not loaded", "not loaded",
              now, "0000-00-00 00:00:00", "0000-00-00 00:00:00",
              "0000-00-00 00:00:00", "0000-00-00 00:00:00"),
         )
@@ -225,20 +138,22 @@ IMPORTANT REQUIREMENTS:
             )
         conn.commit()
         log.info(f"[feed] Seed {seed_id} created with 6 scenes")
+        return seed_id
     except sqlite3.Error as e:
         log.error(f"[feed] DB error: {e}")
         conn.rollback()
+        return None
     finally:
         conn.close()
 
 
-def feed_generate_title_description(rss_entry: dict):
+def feed_generate_title_description(entry: dict):
     """Generate YouTube title + description and write to seed table."""
-    if not rss_entry:
+    if not entry:
         return
     prompt = (
         f"I want YouTube video title and description in JSON format only "
-        f"from this text '{rss_entry['rssText']}'. "
+        f"from this text '{entry['queueText']}'. "
         f"Do not include any text or explanations."
     )
     try:
@@ -246,8 +161,8 @@ def feed_generate_title_description(rss_entry: dict):
         parsed = TitleDescriptionResponse.model_validate_json(raw)
         conn   = sqlite3.connect(DB_PATH)
         conn.execute(
-            "UPDATE seed SET seedTitle=?, seedDescription=? WHERE rssId=?",
-            (parsed.title, parsed.description, rss_entry["rssId"]),
+            "UPDATE seed SET seedTitle=?, seedDescription=? WHERE queueId=?",
+            (parsed.title, parsed.description, entry["queueId"]),
         )
         conn.commit()
         conn.close()
@@ -256,15 +171,15 @@ def feed_generate_title_description(rss_entry: dict):
         log.error(f"[feed] Title/desc error: {e}")
 
 
-def feed_choose_song(rss_entry: dict):
+def feed_choose_song(entry: dict):
     """Pick a background music genre and random MP3, write path to seed table."""
-    if not rss_entry:
+    if not entry:
         return
     genres = ["bright", "calm", "dark", "dramatic", "funky", "happy", "inspirational", "sad"]
     genre = "calm"
     try:
         prompt = (
-            f"I want YouTube video background music from this text '{rss_entry['rssText']}'. "
+            f"I want YouTube video background music from this text '{entry['queueText']}'. "
             f"Choose one of: {' | '.join(genres)}."
         )
         raw    = _llm_chat(prompt, schema=SongResponse.model_json_schema())
@@ -287,17 +202,22 @@ def feed_choose_song(rss_entry: dict):
 
     song_path = random.choice(mp3_files)
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("UPDATE seed SET seedSong=? WHERE rssId=?", (song_path, rss_entry["rssId"]))
+    conn.execute("UPDATE seed SET seedSong=? WHERE queueId=?", (song_path, entry["queueId"]))
     conn.commit()
     conn.close()
     log.info(f"[feed] Song: {song_path}")
 
 
 def run_feed():
-    """Run the full Feed module end-to-end."""
+    """Run the full Feed module end-to-end.
+
+    Only processes entries that were queued manually (Add Text / Import JSON)
+    — there is no automatic fetching from any external RSS/news source.
+    """
     log.info("═══ MODULE: FEED ═══")
-    feed_fetch_snopes()
-    rss = feed_get_unprocessed_rss()
-    feed_process_rss_to_seed(rss)
-    feed_generate_title_description(rss)
-    feed_choose_song(rss)
+    entry = feed_get_unprocessed_entry()
+    seed_id = feed_process_entry_to_seed(entry)
+    if seed_id is None:
+        return
+    feed_generate_title_description(entry)
+    feed_choose_song(entry)

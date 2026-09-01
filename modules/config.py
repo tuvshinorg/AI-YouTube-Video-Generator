@@ -26,7 +26,7 @@ load_dotenv()          # loads .env from CWD or any parent directory
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -36,9 +36,15 @@ from pydantic import BaseModel, ValidationError
 # Auto-detect repo root as the directory that contains this script so the
 # project works regardless of where it was cloned.
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR    = os.getenv("BASE_DIR", os.path.dirname(_SCRIPT_DIR))
+BASE_DIR    = os.getenv("BASE_DIR") or os.path.dirname(_SCRIPT_DIR)
 DB_PATH     = f"{BASE_DIR}/main.db"
 LOG_DIR     = f"{BASE_DIR}/logs"
+
+# ── AI text provider ──────────────────────────────────────────────────────────
+# "llama" (default, local llama.cpp) or "codex" (shells out to the Codex CLI,
+# see modules/codex_provider.py — text generation only, no image capability).
+AI_PROVIDER   = os.getenv("AI_PROVIDER", "llama").lower()
+CODEX_TIMEOUT = int(os.getenv("CODEX_TIMEOUT", "120"))
 
 # ── llama.cpp LLM ─────────────────────────────────────────────────────────────
 # Set LLAMA_MODEL_PATH in .env to your GGUF file.  Download example:
@@ -124,7 +130,12 @@ class SceneInfo(BaseModel):
     text: str
 
 class SceneList(BaseModel):
-    scenes: list[SceneInfo]
+    # min/max both 6: the prompt already demands exactly 6 scenes, and
+    # feed.py's retry loop already rejects anything else post-hoc — this
+    # just puts that same rule in the schema too, so providers with
+    # schema-enforced structured output (Codex) actually honor it during
+    # generation instead of only being checked after the fact.
+    scenes: list[SceneInfo] = Field(min_length=6, max_length=6)
 
 class TitleDescriptionResponse(BaseModel):
     title: str

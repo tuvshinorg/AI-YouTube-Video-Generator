@@ -14,7 +14,7 @@ Usage
 
   make run          # alias for python pipeline.py --output api
   make run-file     # alias for python pipeline.py --output file
-  make cli          # interactive manager (add RSS, queue status, retry…)
+  make cli          # interactive manager (add text, queue status, retry…)
 """
 
 import argparse
@@ -31,7 +31,7 @@ except ImportError:
     pass
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR    = os.getenv("BASE_DIR", _SCRIPT_DIR)
+BASE_DIR    = os.getenv("BASE_DIR") or _SCRIPT_DIR
 DB_PATH     = os.path.join(BASE_DIR, "main.db")
 LOCK_FILE   = os.path.join(BASE_DIR, "pipeline.lock")
 
@@ -78,6 +78,21 @@ MODULES = {
 def _migrate_db():
     """Add columns introduced after the initial schema, without dropping data."""
     conn = sqlite3.connect(DB_PATH)
+
+    # RSS table/columns renamed to QUEUE — the pipeline no longer fetches
+    # anything automatically, so "RSS" no longer described what it holds.
+    existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if "RSS" in existing and "QUEUE" not in existing:
+        conn.execute("ALTER TABLE RSS RENAME TO QUEUE")
+        for old, new in [("rssId", "queueId"), ("rssGroup", "queueGroup"),
+                          ("rssText", "queueText"), ("rssStamp", "queueStamp")]:
+            conn.execute(f"ALTER TABLE QUEUE RENAME COLUMN {old} TO {new}")
+        log.info("[db] Renamed RSS table to QUEUE")
+    seed_cols = {r[1] for r in conn.execute("PRAGMA table_info(SEED)")}
+    if "rssId" in seed_cols and "queueId" not in seed_cols:
+        conn.execute("ALTER TABLE SEED RENAME COLUMN rssId TO queueId")
+        log.info("[db] Renamed SEED.rssId to SEED.queueId")
+
     for col, definition in [
         ("seedErrorStep", "TEXT DEFAULT NULL"),
         ("seedErrorMsg",  "TEXT DEFAULT NULL"),
@@ -104,8 +119,8 @@ def _count(sql: str) -> int:
 
 def _pending_feed():
     return _count(
-        "SELECT COUNT(*) FROM RSS "
-        "WHERE rssId NOT IN (SELECT DISTINCT rssId FROM SEED WHERE rssId IS NOT NULL)"
+        "SELECT COUNT(*) FROM QUEUE "
+        "WHERE queueId NOT IN (SELECT DISTINCT queueId FROM SEED WHERE queueId IS NOT NULL)"
     )
 
 def _pending_image():
@@ -160,14 +175,36 @@ def _pending_clean():
 
 
 # ── Lockfile ──────────────────────────────────────────────────────────────────
+def _pid_alive(pid: int) -> bool:
+    """Cross-platform "is this PID still running" check.
+
+    os.kill(pid, 0) is a POSIX idiom — on Windows, os.kill() only accepts
+    CTRL_C_EVENT/CTRL_BREAK_EVENT/SIGTERM, so passing 0 always raises
+    OSError([WinError 87]) regardless of whether the process exists.
+    """
+    if sys.platform == "win32":
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
+
 def _acquire_lock() -> bool:
     if os.path.exists(LOCK_FILE):
         try:
             pid = int(open(LOCK_FILE).read().strip())
-            os.kill(pid, 0)
-            log.warning(f"Pipeline already running (PID {pid})")
-            return False
-        except (ValueError, ProcessLookupError, PermissionError):
+            if _pid_alive(pid):
+                log.warning(f"Pipeline already running (PID {pid})")
+                return False
+        except ValueError:
             pass
     with open(LOCK_FILE, "w") as f:
         f.write(str(os.getpid()))

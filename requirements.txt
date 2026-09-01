@@ -1,8 +1,5 @@
 # Core dependencies
 sqlite3-utils
-feedparser
-requests
-beautifulsoup4
 pydantic
 html2text
 
@@ -37,3 +34,7 @@ httplib2
 
 # Additional utilities
 python-dotenv
+
+# HTTP API (for the Flutter manager app)
+fastapi
+uvicorn[standard]

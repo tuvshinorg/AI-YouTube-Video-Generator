@@ -5,12 +5,13 @@
 # Database files
 main.db
 
-# Media files (too large for git)
-song/
+# Media files (too large for git) — song/ is the exception, it's the
+# small licensed music library the app ships with and reads at runtime.
 optic/
 *.mp4
 *.mp3
 *.wav
+!song/**
 
 # Temporary files
 temp/
@@ -26,6 +27,11 @@ __pycache__/
 env/
 venv/
 .env
+
+# PyInstaller build output for backend.exe (backend.spec stays tracked)
+/build/
+/dist/
+app/windows/backend/
 
 # IDE files
 .vscode/

@@ -133,6 +133,50 @@ The pipeline treats it exactly like an RSS article and generates a full video.
 
 ---
 
+## Flutter Manager App
+
+A Flutter front end (`app/`) manages the pipeline — add feeds/text, watch
+the queue, start/stop runs, and browse finished videos — built for Windows
+desktop. It talks to a small FastAPI backend (`api.py`) that wraps the same
+operations as `cli.py`, packaged as `backend.exe`.
+
+**The app owns the backend's whole lifecycle** — it spawns `backend.exe`
+itself on a random port with a random auth token, and shuts it down when
+the window closes (or Windows does, if the app is force-killed). There's
+nothing to start manually and nothing to type in — see
+[`docs/CONNECTION.md`](docs/CONNECTION.md) for exactly how, plus a walked
+acceptance checklist.
+
+**1. Build the backend once (or after changing `api.py`):**
+
+```bash
+make backend-exe    # pyinstaller -> dist/backend/, copied into app/windows/backend/
+```
+
+**2. Run or build the app:**
+
+```bash
+cd app
+flutter run -d windows          # dev
+flutter build windows           # → app/build/windows/x64/runner/Release/
+```
+
+That's it — launching either one spawns the backend automatically.
+
+**Dev mode** (hot-reload the UI against a manually-started backend, e.g.
+`uvicorn api:app --reload`): set `YTGEN_BACKEND_URL` (and optionally
+`YTGEN_BACKEND_TOKEN`) and pass `--dev`:
+
+```bash
+YTGEN_BACKEND_URL=http://127.0.0.1:8000 flutter run -d windows -- --dev
+```
+
+> Android support was scaffolded and works the same way, but the platform
+> folder was removed for now. Re-add it anytime with
+> `flutter create --platforms=android .` from inside `app/`.
+
+---
+
 ## Output Modes
 
 | Mode | Command | Result |
@@ -149,6 +193,7 @@ The `--output file` mode skips the upload module and prints the path to your fin
 ```
 make setup        first-time install + cron
 make cli          interactive manager
+make api          REST API for the Flutter manager app
 make run          full pipeline → YouTube upload
 make run-file     full pipeline → save .mp4 locally
 
@@ -180,6 +225,8 @@ cp .env.example .env
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `BASE_DIR` | auto-detected | Absolute path to the repo (set automatically by setup.sh) |
+| `AI_PROVIDER` | `llama` | `llama` (local llama.cpp) or `codex` (Codex CLI — text only, see below) |
+| `CODEX_TIMEOUT` | `120` | Seconds to wait for one `codex exec` call |
 | `LLAMA_MODEL_PATH` | `./models/Llama-3.2-3B-Instruct-Q6_K.gguf` | Path to your GGUF model |
 | `LLAMA_N_CTX` | `4096` | LLM context window (tokens) |
 | `LLAMA_N_GPU` | `-1` | GPU layers: `-1` = all on GPU, `0` = CPU only |
@@ -193,6 +240,27 @@ cp .env.example .env
 | `TTS_VOICE` | `en-US-AvaNeural` | Edge TTS voice (run `edge-tts --list-voices`) |
 | `YT_CLIENT_SECRET` | `client_secret.json` | YouTube OAuth client secret filename |
 | `YT_CREDENTIALS` | `credentials.storage` | OAuth token storage filename |
+
+### Codex as the AI provider (optional)
+
+Set `AI_PROVIDER=codex` to use the [Codex CLI](https://github.com/openai/codex)
+for scene/title/description generation instead of local llama.cpp — useful
+if you don't have a GPU for local inference. Requires `codex` installed and
+logged in (`codex login`) on the machine running the pipeline.
+
+- **Text only.** Codex has no image-generation capability at all — `FLUX_*`
+  still controls scene images regardless of `AI_PROVIDER`.
+- **Auth is whatever `codex login` is signed into.** If that's a ChatGPT
+  Plus/Pro login rather than an API key, know that it's designed for
+  interactive terminal sessions on one device, not unattended backend
+  automation — using it this way may run against OpenAI's usage terms.
+  That's your call to make for your own account, not something this
+  project enforces either way.
+- **Starting a new login ends the old one immediately**, even if the new
+  one is never completed — there's no "cancel and keep the old session."
+  The Flutter app's Settings dialog shows current login status and has a
+  **Login to Codex** button (confirms before proceeding) if you need to
+  sign in from there instead of a terminal.
 
 ---
 
@@ -215,6 +283,10 @@ cp .env.example .env
 AI-YouTube-Video-Generator/
 ├── pipeline.py          unified pipeline (all 10 modules)
 ├── cli.py               interactive CLI manager
+├── api.py               REST API for the Flutter manager app
+├── backend.spec         PyInstaller spec -> backend.exe (make backend-exe)
+├── app/                 Flutter manager app (Windows desktop)
+├── docs/CONNECTION.md   backend<->frontend connection design + checklist
 ├── create.py            database initialiser
 ├── setup.sh             one-shot bootstrap script
 ├── Makefile             convenience targets
@@ -240,6 +312,7 @@ AI-YouTube-Video-Generator/
 ├── temp/                intermediate render files (auto-cleaned)
 │   ├── audio/
 │   ├── clip/
+│   ├── codex/           scratch dir for AI_PROVIDER=codex (per-call schema/output files)
 │   ├── image/
 │   ├── mix/
 │   ├── subtitle/

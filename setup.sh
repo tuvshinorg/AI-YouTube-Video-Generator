@@ -29,6 +29,7 @@ dirs=(
     final
     temp/audio
     temp/clip
+    temp/codex
     temp/image
     temp/mix
     temp/subtitle

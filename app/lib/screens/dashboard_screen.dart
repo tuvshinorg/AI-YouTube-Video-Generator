@@ -1,0 +1,595 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../api_client.dart';
+import '../settings_dialog.dart';
+import '../theme.dart';
+
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+// Gradient families derived from the brand palette (robot blue, YouTube red,
+// amber trail) — used for finished-video tiles, which have no real thumbnail.
+const _tileGradients = [
+  [Color(0xFF123A44), Color(0xFF1B5E6E)], // blue-teal
+  [Color(0xFF0F3B2E), Color(0xFF1D6B4C)], // green-teal
+  [Color(0xFF4A2E0C), Color(0xFF8C5A17)], // amber-brown
+  [Color(0xFF3E1414), Color(0xFF7A2320)], // red-maroon
+  [Color(0xFF241B44), Color(0xFF3D2E75)], // indigo
+];
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final _api = ApiClient();
+  final _ideaCtrl = TextEditingController();
+
+  Map<String, dynamic>? _status;
+  Map<String, dynamic>? _pipelineStatus;
+  Map<String, dynamic>? _queue;
+  Map<String, dynamic>? _codexStatus;
+  List<dynamic> _videos = [];
+  String? _error;
+  bool _busy = false;
+
+  WebSocket? _ws;
+  StreamSubscription? _wsSub;
+  Timer? _pollTimer;
+  Timer? _queueTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshStatusAndQueue();
+    _queueTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshStatusAndQueue(silent: true));
+    _connectWebSocket();
+  }
+
+  @override
+  void dispose() {
+    _ideaCtrl.dispose();
+    _wsSub?.cancel();
+    _ws?.close();
+    _pollTimer?.cancel();
+    _queueTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _connectWebSocket() async {
+    try {
+      final wsUrl = ApiConfig.baseUrl.replaceFirst('http', 'ws');
+      final socket = await WebSocket.connect(
+        '$wsUrl/ws/pipeline',
+        headers: ApiConfig.token.isNotEmpty ? {'Authorization': 'Bearer ${ApiConfig.token}'} : null,
+      );
+      if (!mounted) {
+        socket.close();
+        return;
+      }
+      _pollTimer?.cancel();
+      _ws = socket;
+      _wsSub = socket.listen(
+        (data) {
+          if (!mounted) return;
+          try {
+            setState(() => _pipelineStatus = Map<String, dynamic>.from(jsonDecode(data as String)));
+          } catch (_) {}
+        },
+        onError: (_) => _fallBackToPolling(),
+        onDone: () => _fallBackToPolling(),
+      );
+    } catch (_) {
+      _fallBackToPolling();
+    }
+  }
+
+  void _fallBackToPolling() {
+    if (!mounted || _pollTimer != null) return;
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 500), (_) async {
+      try {
+        final s = await _api.getPipelineStatus();
+        if (mounted) setState(() => _pipelineStatus = s);
+      } catch (_) {}
+    });
+  }
+
+  Future<void> _refreshStatusAndQueue({bool silent = false}) async {
+    if (!silent) setState(() => _error = null);
+    try {
+      final status = await _api.getStatus();
+      final queue = await _api.getQueue();
+      if (!mounted) return;
+      setState(() {
+        _status = status;
+        _queue = queue;
+        _error = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.toString());
+    }
+    try {
+      final videos = await _api.getVideos();
+      if (mounted) setState(() => _videos = videos);
+    } catch (_) {}
+    try {
+      final codex = await _api.getCodexStatus();
+      if (mounted) setState(() => _codexStatus = codex);
+    } catch (_) {}
+  }
+
+  Future<void> _makeTheVideo() async {
+    final text = _ideaCtrl.text.trim();
+    if (text.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      await _api.addText(text);
+      // Always saves the .mp4 locally — YouTube upload needs credentials
+      // this app doesn't set up, so that path isn't offered here.
+      final res = await _api.runPipeline('file');
+      if (!mounted) return;
+      final msg = res['ok'] == true ? 'Queued — pipeline started (PID ${res['pid']})' : (res['note'] ?? 'Queued, but could not start the pipeline');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      _ideaCtrl.clear();
+      await _refreshStatusAndQueue();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not queue it: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _stop() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Stop pipeline?'),
+        content: const Text('This force-kills the running pipeline and any ffmpeg processes it started.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Stop')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _busy = true);
+    try {
+      final res = await _api.stopPipeline();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['ok'] == true ? 'Pipeline stopped' : (res['note'] ?? 'Stop failed'))),
+      );
+      await _refreshStatusAndQueue();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _retry(int seedId) async {
+    try {
+      final res = await _api.retrySeed(seedId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['ok'] == true ? 'Seed $seedId queued for retry' : (res['note'] ?? 'Nothing to retry'))),
+      );
+      await _refreshStatusAndQueue();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
+  Future<void> _open(int seedId) async {
+    final url = Uri.parse(_api.videoUrl(seedId));
+    final ok = await launchUrl(url, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open $url')));
+    }
+  }
+
+  String _formatSize(int bytes) {
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  List<dynamic> get _finishedToday {
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    return _videos.where((v) => (v['modified'] as String? ?? '').startsWith(today)).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null && _status == null) {
+      return RefreshIndicator(
+        onRefresh: _refreshStatusAndQueue,
+        child: ListView(
+          padding: const EdgeInsets.all(24),
+          children: [
+            const SizedBox(height: 48),
+            const Icon(Icons.cloud_off, size: 40, color: AppColors.textMuted),
+            const SizedBox(height: 12),
+            const Text('Cannot reach the backend', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(_error!, style: telemetryStyle()),
+            const SizedBox(height: 16),
+            Center(child: FilledButton(onPressed: _refreshStatusAndQueue, child: const Text('Retry'))),
+          ],
+        ),
+      );
+    }
+
+    final running = (_pipelineStatus?['running'] ?? _status?['running']) == true;
+    final pid = _pipelineStatus?['pid'] ?? _status?['pid'];
+    final stage = _pipelineStatus?['stage'] as String?;
+    final percent = _pipelineStatus?['percent'] as int?;
+    final message = _pipelineStatus?['message'] as String?;
+    final pending = (_queue?['queue_pending'] as List?) ?? [];
+    final seeds = (_queue?['seeds'] as List?) ?? [];
+    final errored = seeds.where((s) => s['stage'] == 'error').toList();
+    final inProgress = seeds.where((s) => s['stage'] != 'error' && s['stage'] != 'uploaded').toList();
+    final codexNotLoggedIn = _codexStatus?['ai_provider'] == 'codex' && _codexStatus?['logged_in'] == false;
+    final finishedToday = _finishedToday;
+
+    return RefreshIndicator(
+      onRefresh: _refreshStatusAndQueue,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            children: [
+              TelemetryPill(
+                dotColor: running ? AppColors.accentAmber : AppColors.textMuted,
+                label: running ? 'pipeline running${pid != null ? ' · pid $pid' : ''}' : 'pipeline idle',
+              ),
+              const SizedBox(width: 16),
+              TelemetryPill(dotColor: AppColors.accentBlue, label: '${pending.length} waiting'),
+              const SizedBox(width: 16),
+              TelemetryPill(dotColor: errored.isNotEmpty ? AppColors.accentRed : AppColors.textMuted, label: '${errored.length} errors'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (codexNotLoggedIn) ...[
+            Card(
+              color: AppColors.accentRed.withValues(alpha: 0.10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.accentRed),
+              ),
+              child: ListTile(
+                leading: const Icon(Icons.warning_amber, color: AppColors.accentRed),
+                title: const Text('Codex is not logged in', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text('Text/scene generation will fail until you sign in.', style: TextStyle(color: AppColors.textMuted)),
+                trailing: FilledButton(
+                  onPressed: () => showSettingsDialog(context).then((_) => _refreshStatusAndQueue()),
+                  child: const Text('Log in'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth > 760;
+              final create = _CreatePanel(
+                controller: _ideaCtrl,
+                busy: _busy,
+                onSubmit: _makeTheVideo,
+                finishedToday: finishedToday,
+              );
+              final status = _StatusPanel(
+                running: running,
+                stage: stage,
+                percent: percent,
+                message: message,
+                onStop: running ? _stop : null,
+                busy: _busy,
+              );
+              if (!wide) {
+                return Column(children: [create, const SizedBox(height: 12), status]);
+              }
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(flex: 3, child: create),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 2, child: status),
+                  ],
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          if (errored.isNotEmpty) ...[
+            _SectionHeader('Needs attention', errored.length, color: AppColors.accentRed),
+            ...errored.map((s) => Card(
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0x22E8362B),
+                      child: Icon(Icons.error_outline, color: AppColors.accentRed),
+                    ),
+                    title: Text(s['seedTitle'] ?? '(untitled)'),
+                    subtitle: Text('Failed at: ${s['seedErrorStep']} — ${s['seedErrorMsg'] ?? ''}',
+                        style: const TextStyle(color: AppColors.accentRed), maxLines: 2, overflow: TextOverflow.ellipsis),
+                    trailing: TextButton(onPressed: () => _retry(s['seedId'] as int), child: const Text('Retry')),
+                  ),
+                )),
+            const SizedBox(height: 8),
+          ],
+          if (pending.isNotEmpty) ...[
+            _SectionHeader('Waiting to be processed', pending.length, color: AppColors.accentBlue),
+            ...pending.map((r) => Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.article_outlined),
+                    title: Text((r['snippet'] ?? '').toString().replaceAll('\n', ' ')),
+                    trailing: Text('#${r['queueId']}', style: telemetryStyle()),
+                  ),
+                )),
+            const SizedBox(height: 8),
+          ],
+          if (inProgress.isNotEmpty) ...[
+            _SectionHeader('In progress', inProgress.length, color: AppColors.accentAmber),
+            ...inProgress.map((s) {
+              final stg = s['stage'] as String? ?? 'processing';
+              final color = stageColor(stg);
+              return Card(
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: color.withValues(alpha: 0.15),
+                    child: Icon(Icons.movie_outlined, color: color),
+                  ),
+                  title: Text(s['seedTitle'] ?? '(untitled)'),
+                  subtitle: Text(s['seedCreatedDate'] ?? '', style: telemetryStyle()),
+                  trailing: Chip(label: Text(stg)),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+          if (_videos.isNotEmpty) ...[
+            _SectionHeader('Finished', _videos.length, color: AppColors.accentGreen),
+            ..._videos.map((v) {
+              final seedId = v['seed_id'] as int?;
+              final uploaded = v['uploaded'] == true;
+              return Card(
+                child: ListTile(
+                  leading: Icon(uploaded ? Icons.cloud_done_outlined : Icons.movie_creation_outlined,
+                      color: uploaded ? AppColors.accentGreen : AppColors.textMuted),
+                  title: Text(v['title'] ?? v['filename'] ?? ''),
+                  subtitle: Text('${_formatSize(v['size_bytes'] ?? 0)} · ${v['modified'] ?? ''}', style: telemetryStyle()),
+                  trailing: seedId == null
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.play_circle_outline),
+                          tooltip: 'Open / download',
+                          onPressed: () => _open(seedId),
+                        ),
+                ),
+              );
+            }),
+          ],
+          if (errored.isEmpty && pending.isEmpty && inProgress.isEmpty && _videos.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 24),
+              child: Center(
+                child: Text('Nothing here yet. Write an idea above to start your first project.',
+                    style: TextStyle(color: AppColors.textMuted), textAlign: TextAlign.center),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color color;
+
+  const _SectionHeader(this.label, this.count, {required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8, top: 4),
+      child: Row(
+        children: [
+          Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          const SizedBox(width: 6),
+          Text('$count', style: telemetryStyle()),
+        ],
+      ),
+    );
+  }
+}
+
+class _CreatePanel extends StatelessWidget {
+  final TextEditingController controller;
+  final bool busy;
+  final VoidCallback onSubmit;
+  final List<dynamic> finishedToday;
+
+  const _CreatePanel({
+    required this.controller,
+    required this.busy,
+    required this.onSubmit,
+    required this.finishedToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Paste an article, or write your idea. The rest is automatic.',
+                style: TextStyle(color: AppColors.textMuted, fontSize: 13)),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              maxLines: 8,
+              minLines: 6,
+              decoration: const InputDecoration(hintText: 'Scientists in Iceland drilled into a magma chamber and...'),
+            ),
+            const SizedBox(height: 6),
+            AnimatedBuilder(
+              animation: controller,
+              builder: (context, _) => Align(
+                alignment: Alignment.centerRight,
+                child: Text('${controller.text.length} characters · 6 scenes', style: telemetryStyle()),
+              ),
+            ),
+            const SizedBox(height: 14),
+            AnimatedBuilder(
+              animation: controller,
+              builder: (context, _) => SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: busy || controller.text.trim().isEmpty ? null : onSubmit,
+                  child: busy
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onAmber))
+                      : const Text('Make the video'),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text('Finished today', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+            const SizedBox(height: 10),
+            if (finishedToday.isEmpty)
+              const Text('Nothing finished yet today.', style: TextStyle(color: AppColors.textMuted, fontSize: 12))
+            else
+              SizedBox(
+                height: 96,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: finishedToday.length,
+                  separatorBuilder: (context, i) => const SizedBox(width: 10),
+                  itemBuilder: (context, i) => _FinishedTile(video: finishedToday[i]),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FinishedTile extends StatelessWidget {
+  final dynamic video;
+  const _FinishedTile({required this.video});
+
+  @override
+  Widget build(BuildContext context) {
+    final seedId = video['seed_id'] as int? ?? 0;
+    final title = (video['title'] as String? ?? 'Untitled').trim();
+    final uploaded = video['uploaded'] == true;
+    final grad = _tileGradients[seedId.abs() % _tileGradients.length];
+
+    return Container(
+      width: 68,
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: grad, begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(uploaded ? Icons.cloud_done_outlined : Icons.save_alt, size: 14, color: Colors.white70),
+          const Spacer(),
+          Text(
+            title,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w600, height: 1.2),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusPanel extends StatelessWidget {
+  final bool running;
+  final String? stage;
+  final int? percent;
+  final String? message;
+  final VoidCallback? onStop;
+  final bool busy;
+
+  const _StatusPanel({required this.running, this.stage, this.percent, this.message, this.onStop, required this.busy});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: running
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.movie_creation_outlined, size: 40, color: AppColors.accentAmber),
+                  const SizedBox(height: 16),
+                  Text(stage ?? 'working', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  if (message != null) ...[
+                    const SizedBox(height: 6),
+                    Text(message!, style: telemetryStyle(), textAlign: TextAlign.center),
+                  ],
+                  if (percent != null) ...[
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        // percent only advances between stages, not within
+                        // one — a real stage can sit at the same percent for
+                        // tens of seconds. Show indeterminate motion instead
+                        // of a static bar so "working" doesn't read as "stuck".
+                        value: percent! == 0 ? null : percent! / 100,
+                        minHeight: 6,
+                        backgroundColor: AppColors.panelBgAlt,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text('$percent%', style: telemetryStyle()),
+                  ],
+                  const SizedBox(height: 20),
+                  TextButton.icon(
+                    onPressed: busy ? null : onStop,
+                    icon: const Icon(Icons.stop_circle, color: AppColors.accentRed, size: 18),
+                    label: const Text('Stop pipeline', style: TextStyle(color: AppColors.accentRed)),
+                  ),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.hourglass_empty, size: 36, color: AppColors.textMuted),
+                  SizedBox(height: 16),
+                  Text('Nothing rendering yet', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+                  SizedBox(height: 8),
+                  Text(
+                    'Queue an idea above — it shows up here while it renders, vertical and ready to post.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}

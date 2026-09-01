@@ -5,8 +5,6 @@ AI YouTube Video Generator — interactive CLI manager
 Usage
 -----
   python cli.py              # interactive menu
-  python cli.py add-rss      # add / validate an RSS feed
-  python cli.py check-rss    # validate all saved feeds
   python cli.py add-json     # import entries from a JSON file
   python cli.py add-text     # manually type text → queue it
   python cli.py queue        # show pipeline queue status
@@ -33,7 +31,7 @@ except ImportError:
     pass
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR    = os.getenv("BASE_DIR", _SCRIPT_DIR)
+BASE_DIR    = os.getenv("BASE_DIR") or _SCRIPT_DIR
 DB_PATH     = os.path.join(BASE_DIR, "main.db")
 LOCK_FILE   = os.path.join(BASE_DIR, "pipeline.lock")
 PYTHON      = sys.executable
@@ -69,23 +67,45 @@ def _db():
     return conn
 
 
-def _insert_rss(group: str, text: str, stamp: str = None) -> int:
-    """Insert one entry into the RSS table and return its rssId."""
+def _insert_queue_entry(group: str, text: str, stamp: str = None) -> int:
+    """Insert one entry into the QUEUE table and return its queueId."""
     stamp = stamp or datetime.utcnow().isoformat(sep=" ", timespec="seconds")
     conn = _db()
     cur  = conn.execute(
-        "INSERT INTO RSS (rssGroup, rssText, rssStamp) VALUES (?,?,?)",
+        "INSERT INTO QUEUE (queueGroup, queueText, queueStamp) VALUES (?,?,?)",
         (group, text, stamp),
     )
-    rss_id = cur.lastrowid
+    queue_id = cur.lastrowid
     conn.commit()
     conn.close()
-    return rss_id
+    return queue_id
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Lock helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _pid_alive(pid: int) -> bool:
+    """Cross-platform "is this PID still running" check.
+
+    os.kill(pid, 0) is a POSIX idiom — on Windows, os.kill() only accepts
+    CTRL_C_EVENT/CTRL_BREAK_EVENT/SIGTERM, so passing 0 always raises
+    OSError([WinError 87]) regardless of whether the process exists.
+    """
+    if sys.platform == "win32":
+        import ctypes
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        handle = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(pid, 0)   # signal 0 = probe only
+        return True
+    except (ProcessLookupError, PermissionError):
+        return False
+
 
 def _pipeline_running() -> bool:
     if not os.path.exists(LOCK_FILE):
@@ -93,9 +113,8 @@ def _pipeline_running() -> bool:
     try:
         with open(LOCK_FILE) as f:
             pid = int(f.read().strip())
-        os.kill(pid, 0)   # signal 0 = probe only
-        return True
-    except (ValueError, ProcessLookupError, PermissionError):
+        return _pid_alive(pid)
+    except ValueError:
         return False
 
 
@@ -105,31 +124,6 @@ def _lock_pid() -> int | None:
             return int(f.read().strip())
     except Exception:
         return None
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# RSS validation
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _validate_rss_url(url: str) -> tuple[bool, str]:
-    """Return (ok, message). Requires feedparser."""
-    try:
-        import feedparser
-    except ImportError:
-        return False, "feedparser not installed — run: pip install feedparser"
-
-    try:
-        feed = feedparser.parse(url)
-    except Exception as e:
-        return False, f"Parse error: {e}"
-
-    if feed.bozo and not feed.entries:
-        return False, f"Feed error: {feed.bozo_exception}"
-    if not feed.entries:
-        return False, "Feed parsed but contains 0 entries"
-
-    title = feed.feed.get("title", "(no title)")
-    return True, f'Valid — "{title}" ({len(feed.entries)} entries)'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -162,69 +156,6 @@ def _pick(msg: str, options: list[str], default: str = "") -> str:
 # COMMANDS
 # ─────────────────────────────────────────────────────────────────────────────
 
-# ── add-rss ──────────────────────────────────────────────────────────────────
-
-def cmd_add_rss(_args=None):
-    """Add and validate an RSS feed URL, then save it for the next pipeline run."""
-    print(bold("\n── Add RSS Feed ──────────────────────────────────────"))
-    url   = _prompt("RSS feed URL")
-    if not url:
-        print(red("No URL entered."))
-        return
-
-    print(dim("  Validating …"))
-    ok, msg = _validate_rss_url(url)
-    if ok:
-        print(green(f"  ✔ {msg}"))
-    else:
-        print(red(f"  ✘ {msg}"))
-        if _prompt("Add anyway? (yes/no)", "no").lower() not in ("y", "yes"):
-            return
-
-    group = _prompt("Group / source name", url.split("/")[2].replace("www.", ""))
-    # Fetch and store the raw feed text so the pipeline can process it
-    try:
-        import feedparser
-        feed = feedparser.parse(url)
-        saved = 0
-        for entry in feed.entries:
-            summary = entry.get("summary") or entry.get("description") or ""
-            title   = entry.get("title", "")
-            text    = f"{title}\n\n{summary}".strip()
-            if text:
-                _insert_rss(group, text, entry.get("published", ""))
-                saved += 1
-        print(green(f"  ✔ Saved {saved} entries from feed (group='{group}')"))
-    except ImportError:
-        # feedparser not available — save the URL itself as a reference
-        _insert_rss(group, url)
-        print(yellow("  ⚠ feedparser not installed; saved URL as-is."))
-    except Exception as e:
-        print(red(f"  Error fetching feed: {e}"))
-
-
-# ── check-rss ────────────────────────────────────────────────────────────────
-
-def cmd_check_rss(_args=None):
-    """Validate all RSS groups stored in the database."""
-    print(bold("\n── Check RSS Feeds ───────────────────────────────────"))
-    conn = _db()
-    rows = conn.execute(
-        "SELECT rssGroup, COUNT(*) as n, MAX(rssStamp) as latest FROM RSS GROUP BY rssGroup ORDER BY rssGroup"
-    ).fetchall()
-    conn.close()
-
-    if not rows:
-        print(yellow("  No RSS entries in database yet."))
-        return
-
-    print(f"  {'Group':<20} {'Entries':>7}  {'Latest entry'}")
-    print("  " + "─" * 55)
-    for row in rows:
-        print(f"  {row['rssGroup']:<20} {row['n']:>7}  {row['latest'] or '—'}")
-    print()
-
-
 # ── add-json ─────────────────────────────────────────────────────────────────
 
 _JSON_SCHEMA = """\
@@ -240,7 +171,7 @@ Field "text" is required. "title" is prepended to text if provided.
 """
 
 def cmd_add_json(_args=None):
-    """Import entries from a JSON file into the RSS queue."""
+    """Import entries from a JSON file into the queue."""
     print(bold("\n── Import from JSON ──────────────────────────────────"))
     print(dim(_JSON_SCHEMA))
     path = _prompt("Path to JSON file")
@@ -271,7 +202,7 @@ def cmd_add_json(_args=None):
             continue
         title = entry.get("title", "").strip()
         full  = f"{title}\n\n{text}".strip() if title else text
-        _insert_rss(group, full)
+        _insert_queue_entry(group, full)
         saved += 1
 
     print(green(f"  ✔ Imported {saved} entries (group='{group}')"))
@@ -281,9 +212,9 @@ def cmd_add_json(_args=None):
 # ── add-text ─────────────────────────────────────────────────────────────────
 
 def cmd_add_text(_args=None):
-    """Manually input text to queue a video without an RSS feed."""
+    """Manually input text to queue a video."""
     print(bold("\n── Manual Text Input ─────────────────────────────────"))
-    print(dim("  The text you enter will be queued like an RSS article."))
+    print(dim("  The text you enter will be queued for the pipeline."))
     print(dim("  The pipeline will use it to generate scenes and a video.\n"))
 
     title = _prompt("Title (optional)")
@@ -305,8 +236,8 @@ def cmd_add_text(_args=None):
 
     full  = f"{title}\n\n{text}".strip() if title else text
     group = _prompt("Group label", "manual")
-    rss_id = _insert_rss(group, full)
-    print(green(f"  ✔ Queued as RSS entry #{rss_id} (group='{group}')"))
+    queue_id = _insert_queue_entry(group, full)
+    print(green(f"  ✔ Queued as entry #{queue_id} (group='{group}')"))
     print(dim(f"  Run  make run  or  python cli.py run  to process it."))
 
 
@@ -317,12 +248,12 @@ def cmd_queue(_args=None):
     print(bold("\n── Pipeline Queue ────────────────────────────────────"))
     conn = _db()
 
-    # Un-processed RSS entries (not yet turned into seeds)
-    rss_pending = conn.execute(
-        """SELECT rssId, rssGroup, SUBSTR(rssText,1,60) as snippet, rssStamp
-           FROM RSS
-           WHERE rssId NOT IN (SELECT rssId FROM SEED)
-           ORDER BY rssId
+    # Un-processed queue entries (not yet turned into seeds)
+    queue_pending = conn.execute(
+        """SELECT queueId, queueGroup, SUBSTR(queueText,1,60) as snippet, queueStamp
+           FROM QUEUE
+           WHERE queueId NOT IN (SELECT queueId FROM SEED)
+           ORDER BY queueId
            LIMIT 20"""
     ).fetchall()
 
@@ -352,15 +283,15 @@ def cmd_queue(_args=None):
         print(dim("  ○ Pipeline is idle"))
 
     print()
-    if rss_pending:
-        print(f"  {bold('Pending RSS entries')} (not yet processed into scenes):")
-        print(f"  {'ID':>5}  {'Group':<16}  {'Fetched':<20}  Snippet")
+    if queue_pending:
+        print(f"  {bold('Pending queue entries')} (not yet processed into scenes):")
+        print(f"  {'ID':>5}  {'Group':<16}  {'Queued':<20}  Snippet")
         print("  " + "─" * 72)
-        for r in rss_pending:
+        for r in queue_pending:
             snippet = (r["snippet"] or "").replace("\n", " ")
-            print(f"  {r['rssId']:>5}  {(r['rssGroup'] or ''):<16}  {(r['rssStamp'] or '')[:19]:<20}  {snippet}…")
+            print(f"  {r['queueId']:>5}  {(r['queueGroup'] or ''):<16}  {(r['queueStamp'] or '')[:19]:<20}  {snippet}…")
     else:
-        print(dim("  No unprocessed RSS entries."))
+        print(dim("  No unprocessed queue entries."))
 
     print()
     # Fetch error info too
@@ -450,10 +381,18 @@ def cmd_retry(args=None):
         return
     print(f"  Title: {title}")
     print(f"  Failed step: {red(step)}")
-    conn.execute("UPDATE SEED SET seedErrorStep=NULL, seedErrorMsg=NULL WHERE seedId=?", (seed_id,))
-    conn.commit()
-    conn.close()
-    print(green(f"  ✔ Error cleared — seed {seed_id} will be retried on next pipeline run."))
+    if step == "feed":
+        # No scenes/tasks exist for this seed — it only exists to record the
+        # error. Delete it so the queue entry is picked up as pending again.
+        conn.execute("DELETE FROM SEED WHERE seedId=?", (seed_id,))
+        conn.commit()
+        conn.close()
+        print(green(f"  ✔ Seed {seed_id} removed — its queue entry will be regenerated on next pipeline run."))
+    else:
+        conn.execute("UPDATE SEED SET seedErrorStep=NULL, seedErrorMsg=NULL WHERE seedId=?", (seed_id,))
+        conn.commit()
+        conn.close()
+        print(green(f"  ✔ Error cleared — seed {seed_id} will be retried on next pipeline run."))
 
 
 # ── stop ─────────────────────────────────────────────────────────────────────
@@ -493,15 +432,13 @@ def cmd_stop(_args=None):
 # ─────────────────────────────────────────────────────────────────────────────
 
 MENU = [
-    ("1", "Add RSS feed",          cmd_add_rss),
-    ("2", "Check RSS feeds",       cmd_check_rss),
-    ("3", "Import from JSON",      cmd_add_json),
-    ("4", "Enter text manually",   cmd_add_text),
-    ("5", "Show queue",            cmd_queue),
-    ("6", "Retry failed video",    cmd_retry),
-    ("7", "Run pipeline (api)",    lambda _: cmd_run(type("A", (), {"output": "api"})())),
-    ("8", "Run pipeline (file)",   lambda _: cmd_run(type("A", (), {"output": "file"})())),
-    ("9", "Stop running pipeline", cmd_stop),
+    ("1", "Import from JSON",      cmd_add_json),
+    ("2", "Enter text manually",   cmd_add_text),
+    ("3", "Show queue",            cmd_queue),
+    ("4", "Retry failed video",    cmd_retry),
+    ("5", "Run pipeline (api)",    lambda _: cmd_run(type("A", (), {"output": "api"})())),
+    ("6", "Run pipeline (file)",   lambda _: cmd_run(type("A", (), {"output": "file"})())),
+    ("7", "Stop running pipeline", cmd_stop),
     ("q", "Quit",                  None),
 ]
 
@@ -548,7 +485,7 @@ def main():
         epilog=textwrap.dedent("""\
             Examples:
               python cli.py                  # interactive menu
-              python cli.py add-rss          # add an RSS feed
+              python cli.py add-json         # import entries from a JSON file
               python cli.py add-text         # queue manual text
               python cli.py queue            # show status
               python cli.py run              # run full pipeline (uploads to YouTube)
@@ -558,8 +495,6 @@ def main():
     )
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
 
-    sub.add_parser("add-rss",    help="Add and validate an RSS feed URL")
-    sub.add_parser("check-rss",  help="Validate all saved RSS groups")
     sub.add_parser("add-json",   help="Import entries from a JSON file")
     sub.add_parser("add-text",   help="Manually enter text to queue a video")
     sub.add_parser("queue",      help="Show pipeline queue and status")
@@ -582,8 +517,6 @@ def main():
     args = parser.parse_args()
 
     dispatch = {
-        "add-rss":   cmd_add_rss,
-        "check-rss": cmd_check_rss,
         "add-json":  cmd_add_json,
         "add-text":  cmd_add_text,
         "queue":     cmd_queue,

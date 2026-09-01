@@ -8,7 +8,7 @@ except ImportError:
     pass  # python-dotenv not installed yet during first bootstrap run
 
 _script_dir = os.path.dirname(os.path.abspath(__file__))
-_base_dir   = os.getenv("BASE_DIR", _script_dir)
+_base_dir   = os.getenv("BASE_DIR") or _script_dir
 _db_path    = os.path.join(_base_dir, "main.db")
 
 try:
@@ -19,18 +19,19 @@ try:
     cursor_obj = connection_obj.cursor()
 
     # Drop existing tables if they exist
-    tables = ["RSS", "TASK", "SCENE", "SEED"]
+    tables = ["QUEUE", "TASK", "SCENE", "SEED"]
     for table in tables:
         cursor_obj.execute(f"DROP TABLE IF EXISTS {table}")
 
-    # Create RSS table
+    # Create QUEUE table — entries added manually (Add Text / Import JSON),
+    # no automatic fetching from any external source.
     cursor_obj.execute(
         """
-        CREATE TABLE RSS (
-            rssId INTEGER PRIMARY KEY AUTOINCREMENT,
-            rssGroup TEXT NOT NULL,
-            rssText TEXT NOT NULL,
-            rssStamp TIMESTAMP
+        CREATE TABLE QUEUE (
+            queueId INTEGER PRIMARY KEY AUTOINCREMENT,
+            queueGroup TEXT NOT NULL,
+            queueText TEXT NOT NULL,
+            queueStamp TIMESTAMP
         )
     """
     )
@@ -69,7 +70,7 @@ try:
         """
         CREATE TABLE SEED (
             seedId INTEGER PRIMARY KEY AUTOINCREMENT,
-            rssId INT NOT NULL,
+            queueId INT NOT NULL,
             seedPrompt TEXT NOT NULL,
             seedTitle TEXT NOT NULL,
             seedDescription TEXT NOT NULL,

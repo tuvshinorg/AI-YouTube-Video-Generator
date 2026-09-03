@@ -286,7 +286,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                               Expanded(
                                 child: SelectableText(
                                   _loginPrompt!['code']!,
-                                  style: const TextStyle(fontFamily: telemetryFont, fontSize: 18, fontWeight: FontWeight.w700),
+                                  style: const TextStyle(fontFamily: consoleFont, fontSize: 18, fontWeight: FontWeight.w700),
                                 ),
                               ),
                               IconButton(
@@ -440,7 +440,7 @@ Widget _row(String label, String value) => Padding(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(width: 100, child: Text(label, style: const TextStyle(color: AppColors.textMuted))),
-          Expanded(child: SelectableText(value, style: const TextStyle(fontFamily: telemetryFont, fontSize: 12))),
+          Expanded(child: SelectableText(value, style: const TextStyle(fontFamily: consoleFont, fontSize: 12))),
         ],
       ),
     );

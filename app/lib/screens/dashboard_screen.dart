@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../settings_dialog.dart';
+import '../stage_ring.dart';
 import '../theme.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -145,6 +146,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // Manually nudges the pipeline forward when idle but there's unfinished
+  // work sitting in the queue/in-progress — no new text required.
+  Future<void> _runNow() async {
+    setState(() => _busy = true);
+    try {
+      final res = await _api.runPipeline('file');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(res['ok'] == true ? 'Pipeline started (PID ${res['pid']})' : (res['note'] ?? 'Could not start'))),
+      );
+      await _refreshStatusAndQueue();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _stop() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -175,12 +195,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _retry(int seedId) async {
+  // "Resume" — clears the error/re-queues it, then immediately starts the
+  // pipeline so it actually gets worked on rather than just sitting ready.
+  Future<void> _resume(int seedId) async {
     try {
       final res = await _api.retrySeed(seedId);
       if (!mounted) return;
+      if (res['ok'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res['note'] ?? 'Nothing to resume')));
+        return;
+      }
+      final runRes = await _api.runPipeline('file');
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(res['ok'] == true ? 'Seed $seedId queued for retry' : (res['note'] ?? 'Nothing to retry'))),
+        SnackBar(content: Text(runRes['ok'] == true ? 'Resumed — pipeline started (PID ${runRes['pid']})' : 'Queued — will run on the next pipeline start')),
       );
       await _refreshStatusAndQueue();
     } catch (e) {
@@ -195,6 +223,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open $url')));
     }
+  }
+
+  Future<void> _deleteQueueEntry(int queueId) async {
+    final confirmed = await _confirmDelete('Delete this queued item? It hasn\'t started processing yet.');
+    if (confirmed != true) return;
+    try {
+      await _api.deleteQueueEntry(queueId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deleted')));
+      await _refreshStatusAndQueue();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not delete: $e')));
+    }
+  }
+
+  Future<void> _deleteSeed(int seedId, {bool hasVideo = false}) async {
+    final confirmed = await _confirmDelete(
+      hasVideo
+          ? 'Delete this project? Its rendered .mp4 will be deleted too. This can\'t be undone.'
+          : 'Delete this project? This can\'t be undone.',
+    );
+    if (confirmed != true) return;
+    try {
+      await _api.deleteSeed(seedId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Deleted')));
+      await _refreshStatusAndQueue();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not delete: $e')));
+    }
+  }
+
+  Future<bool?> _confirmDelete(String message) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete?'),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.accentRed),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openQueueDetail(int queueId) async {
+    showDialog(context: context, builder: (context) => _DetailDialog(loader: () => _api.getQueueEntry(queueId)));
+  }
+
+  Future<void> _openSeedDetail(int seedId) async {
+    showDialog(context: context, builder: (context) => _DetailDialog(loader: () => _api.getSeedDetail(seedId)));
   }
 
   String _formatSize(int bytes) {
@@ -233,10 +319,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final stage = _pipelineStatus?['stage'] as String?;
     final percent = _pipelineStatus?['percent'] as int?;
     final message = _pipelineStatus?['message'] as String?;
+    final startedAt = _pipelineStatus?['started_at'] as String?;
+    final logTail = ((_pipelineStatus?['log_tail'] as List?) ?? []).cast<String>();
     final pending = (_queue?['queue_pending'] as List?) ?? [];
     final seeds = (_queue?['seeds'] as List?) ?? [];
     final errored = seeds.where((s) => s['stage'] == 'error').toList();
-    final inProgress = seeds.where((s) => s['stage'] != 'error' && s['stage'] != 'uploaded').toList();
+    // A seed whose .mp4 already exists (i.e. it's in _videos) is done, full
+    // stop — but its DB stage sits at 'rendered' forever, since "Make the
+    // video" always runs the pipeline with output=file and no YouTube
+    // upload ever happens to set seedUploadStamp. Without this check every
+    // finished project would show under both "In progress" and "Finished"
+    // permanently, not just transiently.
+    final finishedSeedIds = _videos.map((v) => v['seed_id']).whereType<int>().toSet();
+    final inProgress = seeds
+        .where((s) => s['stage'] != 'error' && s['stage'] != 'uploaded' && !finishedSeedIds.contains(s['seedId']))
+        .toList();
     final codexNotLoggedIn = _codexStatus?['ai_provider'] == 'codex' && _codexStatus?['logged_in'] == false;
     final finishedToday = _finishedToday;
 
@@ -291,8 +388,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 stage: stage,
                 percent: percent,
                 message: message,
+                startedAt: startedAt,
+                logTail: logTail,
                 onStop: running ? _stop : null,
                 busy: _busy,
+                pendingCount: pending.length,
+                inProgressCount: inProgress.length,
+                erroredCount: errored.length,
+                onRunNow: _runNow,
               );
               if (!wide) {
                 return Column(children: [create, const SizedBox(height: 12), status]);
@@ -311,72 +414,127 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const Divider(),
           if (errored.isNotEmpty) ...[
-            _SectionHeader('Needs attention', errored.length, color: AppColors.accentRed),
-            ...errored.map((s) => Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      backgroundColor: Color(0x22E8362B),
-                      child: Icon(Icons.error_outline, color: AppColors.accentRed),
+            _SectionHeader('Needs attention', errored.length),
+            _groupedList(errored.map((s) {
+              final seedId = s['seedId'] as int;
+              return ListTile(
+                onTap: () => _openSeedDetail(seedId),
+                leading: StageRing(
+                  size: 34,
+                  color: AppColors.accentRed,
+                  value: 1,
+                  child: const Icon(Icons.priority_high_rounded, color: AppColors.accentRed, size: 15),
+                ),
+                title: Text(s['seedTitle'] ?? '(untitled)'),
+                subtitle: Text('Failed at ${s['seedErrorStep']} — ${s['seedErrorMsg'] ?? ''}',
+                    style: telemetryStyle(color: const Color(0xFFFF8079)), maxLines: 2, overflow: TextOverflow.ellipsis),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextButton(onPressed: () => _resume(seedId), child: const Text('Resume')),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      tooltip: 'Delete',
+                      onPressed: () => _deleteSeed(seedId),
                     ),
-                    title: Text(s['seedTitle'] ?? '(untitled)'),
-                    subtitle: Text('Failed at: ${s['seedErrorStep']} — ${s['seedErrorMsg'] ?? ''}',
-                        style: const TextStyle(color: AppColors.accentRed), maxLines: 2, overflow: TextOverflow.ellipsis),
-                    trailing: TextButton(onPressed: () => _retry(s['seedId'] as int), child: const Text('Retry')),
-                  ),
-                )),
+                  ],
+                ),
+              );
+            }).toList()),
             const SizedBox(height: 8),
           ],
           if (pending.isNotEmpty) ...[
-            _SectionHeader('Waiting to be processed', pending.length, color: AppColors.accentBlue),
-            ...pending.map((r) => Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.article_outlined),
-                    title: Text((r['snippet'] ?? '').toString().replaceAll('\n', ' ')),
-                    trailing: Text('#${r['queueId']}', style: telemetryStyle()),
-                  ),
-                )),
+            _SectionHeader('Waiting to be processed', pending.length),
+            _groupedList(pending.map((r) {
+              final queueId = r['queueId'] as int;
+              return ListTile(
+                onTap: () => _openQueueDetail(queueId),
+                leading: StageRing(
+                  size: 34,
+                  color: AppColors.textMuted,
+                  value: 0,
+                  child: const Icon(Icons.article_outlined, color: AppColors.textMuted, size: 15),
+                ),
+                title: Text((r['snippet'] ?? '').toString().replaceAll('\n', ' '), maxLines: 2, overflow: TextOverflow.ellipsis),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('#$queueId', style: telemetryStyle()),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      tooltip: 'Delete',
+                      onPressed: () => _deleteQueueEntry(queueId),
+                    ),
+                  ],
+                ),
+              );
+            }).toList()),
             const SizedBox(height: 8),
           ],
           if (inProgress.isNotEmpty) ...[
-            _SectionHeader('In progress', inProgress.length, color: AppColors.accentAmber),
-            ...inProgress.map((s) {
+            _SectionHeader('In progress', inProgress.length),
+            _groupedList(inProgress.map((s) {
+              final seedId = s['seedId'] as int;
               final stg = s['stage'] as String? ?? 'processing';
               final color = stageColor(stg);
-              return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: color.withValues(alpha: 0.15),
-                    child: Icon(Icons.movie_outlined, color: color),
-                  ),
-                  title: Text(s['seedTitle'] ?? '(untitled)'),
-                  subtitle: Text(s['seedCreatedDate'] ?? '', style: telemetryStyle()),
-                  trailing: Chip(label: Text(stg)),
+              return ListTile(
+                onTap: () => _openSeedDetail(seedId),
+                leading: StageRing(
+                  size: 34,
+                  color: color,
+                  value: stageProgress(stg),
+                  child: Icon(Icons.movie_outlined, color: color, size: 15),
+                ),
+                title: Text(s['seedTitle'] ?? '(untitled)'),
+                subtitle: Text('$stg · ${s['seedCreatedDate'] ?? ''}', style: telemetryStyle()),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  tooltip: 'Delete',
+                  onPressed: () => _deleteSeed(seedId),
                 ),
               );
-            }),
+            }).toList()),
             const SizedBox(height: 8),
           ],
           if (_videos.isNotEmpty) ...[
-            _SectionHeader('Finished', _videos.length, color: AppColors.accentGreen),
-            ..._videos.map((v) {
+            _SectionHeader('Finished', _videos.length),
+            _groupedList(_videos.map((v) {
               final seedId = v['seed_id'] as int?;
               final uploaded = v['uploaded'] == true;
-              return Card(
-                child: ListTile(
-                  leading: Icon(uploaded ? Icons.cloud_done_outlined : Icons.movie_creation_outlined,
-                      color: uploaded ? AppColors.accentGreen : AppColors.textMuted),
-                  title: Text(v['title'] ?? v['filename'] ?? ''),
-                  subtitle: Text('${_formatSize(v['size_bytes'] ?? 0)} · ${v['modified'] ?? ''}', style: telemetryStyle()),
-                  trailing: seedId == null
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.play_circle_outline),
-                          tooltip: 'Open / download',
-                          onPressed: () => _open(seedId),
-                        ),
+              // A finished local file is a real success state even when it
+              // was never uploaded (this app's "Make the video" flow never
+              // uploads at all — see the inProgress filter above) — so the
+              // ring is always full, just tinted by whether it shipped.
+              final color = uploaded ? AppColors.accentGreen : AppColors.accentBlue;
+              return ListTile(
+                onTap: seedId == null ? null : () => _openSeedDetail(seedId),
+                leading: StageRing(
+                  size: 34,
+                  color: color,
+                  value: 1,
+                  child: Icon(uploaded ? Icons.cloud_done_outlined : Icons.check_rounded, color: color, size: 16),
                 ),
+                title: Text(v['title'] ?? v['filename'] ?? ''),
+                subtitle: Text('${_formatSize(v['size_bytes'] ?? 0)} · ${v['modified'] ?? ''}', style: telemetryStyle()),
+                trailing: seedId == null
+                    ? null
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.play_circle_outline),
+                            tooltip: 'Open / download',
+                            onPressed: () => _open(seedId),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 20),
+                            tooltip: 'Delete',
+                            onPressed: () => _deleteSeed(seedId, hasVideo: true),
+                          ),
+                        ],
+                      ),
               );
-            }),
+            }).toList()),
           ],
           if (errored.isEmpty && pending.isEmpty && inProgress.isEmpty && _videos.isEmpty)
             const Padding(
@@ -392,28 +550,145 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
+/// "Look inside" — fetches and shows either a queued entry's full text or a
+/// project's title/description/scene breakdown, depending on what the
+/// loader returns.
+class _DetailDialog extends StatefulWidget {
+  final Future<Map<String, dynamic>> Function() loader;
+  const _DetailDialog({required this.loader});
+
+  @override
+  State<_DetailDialog> createState() => _DetailDialogState();
+}
+
+class _DetailDialogState extends State<_DetailDialog> {
+  Map<String, dynamic>? _data;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.loader().then(
+      (d) => mounted ? setState(() => _data = d) : null,
+      onError: (e) => mounted ? setState(() => _error = e.toString()) : null,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isSeed = _data?.containsKey('scenes') == true;
+    return AlertDialog(
+      title: Text(isSeed ? (_data!['seedTitle'] as String? ?? 'Untitled') : 'Queued text'),
+      content: SizedBox(
+        width: 480,
+        child: _error != null
+            ? Text(_error!, style: const TextStyle(color: AppColors.accentRed))
+            : _data == null
+                ? const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()))
+                : SingleChildScrollView(
+                    child: isSeed ? _seedContent(_data!) : _queueContent(_data!),
+                  ),
+      ),
+      actions: [FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+    );
+  }
+
+  Widget _queueContent(Map<String, dynamic> d) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Group: ${d['queueGroup'] ?? ''} · Queued: ${d['queueStamp'] ?? ''}', style: telemetryStyle()),
+        const SizedBox(height: 12),
+        SelectableText(d['queueText'] as String? ?? ''),
+      ],
+    );
+  }
+
+  Widget _seedContent(Map<String, dynamic> d) {
+    final scenes = (d['scenes'] as List?) ?? [];
+    final stage = d['stage'] as String? ?? 'processing';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TelemetryPill(dotColor: stageColor(stage), label: stage),
+        if ((d['seedDescription'] as String?)?.isNotEmpty == true && d['seedDescription'] != 'not loaded') ...[
+          const SizedBox(height: 10),
+          SelectableText(d['seedDescription'] as String),
+        ],
+        if (stage == 'error') ...[
+          const SizedBox(height: 10),
+          Text('Failed at: ${d['seedErrorStep']}', style: const TextStyle(color: AppColors.accentRed, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          SelectableText(d['seedErrorMsg'] as String? ?? '', style: const TextStyle(color: AppColors.accentRed, fontSize: 12)),
+        ],
+        if (scenes.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Text('Scenes', style: TextStyle(fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          ...scenes.map((s) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Scene ${s['sceneNumber']}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+                    const SizedBox(height: 2),
+                    SelectableText(s['sceneText'] as String? ?? '', style: const TextStyle(fontSize: 13)),
+                    const SizedBox(height: 2),
+                    Text('Image: ${s['sceneImage'] ?? ''}', style: telemetryStyle(size: 11)),
+                  ],
+                ),
+              )),
+        ],
+      ],
+    );
+  }
+}
+
+// A quiet uppercase eyebrow — macOS System Settings' section-label style —
+// instead of a bold colored-dot header. The color already lives on each
+// row's StageRing; repeating it in the header was noise.
 class _SectionHeader extends StatelessWidget {
   final String label;
   final int count;
-  final Color color;
 
-  const _SectionHeader(this.label, this.count, {required this.color});
+  const _SectionHeader(this.label, this.count);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8, top: 4),
+      padding: const EdgeInsets.only(bottom: 10, top: 6, left: 2),
       child: Row(
         children: [
-          Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-          const SizedBox(width: 8),
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+          Text(
+            label.toUpperCase(),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11.5, letterSpacing: 0.7, color: AppColors.textMuted),
+          ),
           const SizedBox(width: 6),
           Text('$count', style: telemetryStyle()),
         ],
       ),
     );
   }
+}
+
+/// macOS-style "grouped inset list" — one rounded container per section,
+/// rows separated by hairline dividers instead of each row being its own
+/// bordered Card. This is the single biggest lever on how "considered" the
+/// list looks: fewer, quieter boundaries instead of one stroke per row.
+Widget _groupedList(List<Widget> rows) {
+  final children = <Widget>[];
+  for (var i = 0; i < rows.length; i++) {
+    children.add(rows[i]);
+    if (i != rows.length - 1) {
+      children.add(const Divider(height: 1, thickness: 1, indent: 66));
+    }
+  }
+  return Container(
+    margin: const EdgeInsets.only(bottom: 8),
+    decoration: BoxDecoration(color: AppColors.panelBg, borderRadius: BorderRadius.circular(16)),
+    clipBehavior: Clip.antiAlias,
+    child: Column(children: children),
+  );
 }
 
 class _CreatePanel extends StatelessWidget {
@@ -529,67 +804,168 @@ class _StatusPanel extends StatelessWidget {
   final String? stage;
   final int? percent;
   final String? message;
+  final String? startedAt;
+  final List<String> logTail;
   final VoidCallback? onStop;
   final bool busy;
+  final int pendingCount;
+  final int inProgressCount;
+  final int erroredCount;
+  final VoidCallback? onRunNow;
 
-  const _StatusPanel({required this.running, this.stage, this.percent, this.message, this.onStop, required this.busy});
+  const _StatusPanel({
+    required this.running,
+    this.stage,
+    this.percent,
+    this.message,
+    this.startedAt,
+    this.logTail = const [],
+    this.onStop,
+    required this.busy,
+    this.pendingCount = 0,
+    this.inProgressCount = 0,
+    this.erroredCount = 0,
+    this.onRunNow,
+  });
+
+  String? get _elapsed {
+    if (startedAt == null) return null;
+    try {
+      final d = DateTime.now().difference(DateTime.parse(startedAt!));
+      if (d.inSeconds < 60) return 'running ${d.inSeconds}s';
+      final m = d.inMinutes;
+      final s = d.inSeconds % 60;
+      return 'running ${m}m ${s}s';
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: running
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.movie_creation_outlined, size: 40, color: AppColors.accentAmber),
-                  const SizedBox(height: 16),
-                  Text(stage ?? 'working', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                  if (message != null) ...[
-                    const SizedBox(height: 6),
-                    Text(message!, style: telemetryStyle(), textAlign: TextAlign.center),
-                  ],
-                  if (percent != null) ...[
-                    const SizedBox(height: 16),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        // percent only advances between stages, not within
-                        // one — a real stage can sit at the same percent for
-                        // tens of seconds. Show indeterminate motion instead
-                        // of a static bar so "working" doesn't read as "stuck".
-                        value: percent! == 0 ? null : percent! / 100,
-                        minHeight: 6,
-                        backgroundColor: AppColors.panelBgAlt,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text('$percent%', style: telemetryStyle()),
-                  ],
-                  const SizedBox(height: 20),
-                  TextButton.icon(
-                    onPressed: busy ? null : onStop,
-                    icon: const Icon(Icons.stop_circle, color: AppColors.accentRed, size: 18),
-                    label: const Text('Stop pipeline', style: TextStyle(color: AppColors.accentRed)),
-                  ),
-                ],
-              )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.hourglass_empty, size: 36, color: AppColors.textMuted),
-                  SizedBox(height: 16),
-                  Text('Nothing rendering yet', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
-                  SizedBox(height: 8),
-                  Text(
-                    'Queue an idea above — it shows up here while it renders, vertical and ready to post.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                  ),
-                ],
-              ),
+        child: running ? _buildRunning(context) : _buildIdle(context),
       ),
+    );
+  }
+
+  Widget _buildRunning(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        StageRing(
+          size: 96,
+          strokeWidth: 5,
+          color: AppColors.accentAmber,
+          // percent only advances between stages, not within one — a real
+          // stage can sit at the same percent for tens of seconds. Show
+          // indeterminate motion instead of a static fraction so "working"
+          // never reads as "stuck".
+          value: percent == null || percent == 0 ? null : percent! / 100,
+          child: const Icon(Icons.movie_creation_outlined, size: 26, color: AppColors.accentAmber),
+        ),
+        const SizedBox(height: 14),
+        Text(stage ?? 'working', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        if (_elapsed != null) ...[
+          const SizedBox(height: 2),
+          Text(_elapsed!, style: telemetryStyle()),
+        ],
+        if (message != null) ...[
+          const SizedBox(height: 6),
+          Text(message!, style: telemetryStyle(), textAlign: TextAlign.center),
+        ],
+        const SizedBox(height: 18),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text('ACTIVITY', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 10.5, letterSpacing: 0.7, color: AppColors.textMuted)),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 90, maxHeight: 140),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: AppColors.panelBgAlt, borderRadius: BorderRadius.circular(10)),
+          child: logTail.isEmpty
+              ? Text('Waiting for the first log line…', style: consoleStyle(size: 11))
+              : SingleChildScrollView(
+                  reverse: true,
+                  child: SelectableText(logTail.join('\n'), style: consoleStyle(size: 11)),
+                ),
+        ),
+        const SizedBox(height: 14),
+        TextButton.icon(
+          onPressed: busy ? null : onStop,
+          icon: const Icon(Icons.stop_circle, color: AppColors.accentRed, size: 18),
+          label: const Text('Stop pipeline', style: TextStyle(color: AppColors.accentRed)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIdle(BuildContext context) {
+    final unfinished = pendingCount + inProgressCount + erroredCount;
+    if (unfinished == 0) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const StageRing(
+            size: 96,
+            strokeWidth: 5,
+            color: AppColors.textMuted,
+            value: 0,
+            child: Icon(Icons.check_rounded, size: 26, color: AppColors.textMuted),
+          ),
+          const SizedBox(height: 16),
+          const Text('Nothing rendering yet', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 8),
+          const Text(
+            'Queue an idea above — it shows up here while it renders, vertical and ready to post.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+          ),
+        ],
+      );
+    }
+    // Idle doesn't mean empty — say exactly what's sitting here and why
+    // nothing is moving, instead of a generic message that contradicts
+    // the sections below it.
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const StageRing(
+          size: 96,
+          strokeWidth: 5,
+          color: AppColors.accentAmber,
+          value: 0,
+          child: Icon(Icons.pause_rounded, size: 26, color: AppColors.accentAmber),
+        ),
+        const SizedBox(height: 16),
+        const Text('Pipeline is idle', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+        const SizedBox(height: 8),
+        Text(
+          [
+            if (erroredCount > 0) '$erroredCount needing attention',
+            if (pendingCount > 0) '$pendingCount waiting',
+            if (inProgressCount > 0) '$inProgressCount in progress',
+          ].join(' · '),
+          textAlign: TextAlign.center,
+          style: telemetryStyle(),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          "Nothing is running right now — it won't move until the pipeline starts again.",
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+        ),
+        const SizedBox(height: 14),
+        FilledButton.icon(
+          onPressed: busy ? null : onRunNow,
+          icon: const Icon(Icons.play_arrow, size: 18),
+          label: const Text('Run now'),
+        ),
+      ],
     );
   }
 }

@@ -45,7 +45,7 @@ class YtGenManagerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Shorts Factory',
+      title: 'AI YouTube Video Generator',
       theme: buildAppTheme(),
       themeMode: ThemeMode.dark,
       home: const HomeShell(),

@@ -1,41 +1,69 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-/// Design tokens for the app, pulled from the product's mascot (blue/white
-/// robot, YouTube-red camera, amber motion trail) rather than a generic
-/// Material palette. One dark theme only — there's no light variant.
+/// Design tokens for the app. True-neutral dark surfaces (no teal/green
+/// cast) with one signature brand accent (amber) plus semantic state colors
+/// pulled from the same family Apple uses for its own system palette — so
+/// they read as considered states, not a rainbow. One dark theme only —
+/// there's no light variant.
 class AppColors {
   AppColors._();
 
-  static const bgVoid = Color(0xFF090C10);
-  static const panelBg = Color(0xFF101E1B);
-  static const panelBgAlt = Color(0xFF0C1613);
-  static const panelBorder = Color(0xFF1E332D);
+  static const bgVoid = Color(0xFF111113);
+  static const panelBg = Color(0xFF1B1B1F);
+  static const panelBgAlt = Color(0xFF19191C);
+  // Row hover/pressed state inside a grouped list — replaces a stroked
+  // border as the way surfaces separate from each other.
+  static const surfaceRaised = Color(0xFF25252A);
+  // Hairline divider between rows in a grouped list. Expressed as a low-
+  // alpha white so it reads correctly regardless of which surface it sits
+  // on, the way a real hairline does.
+  static const hairline = Color(0x1FFFFFFF);
 
-  static const textPrimary = Color(0xFFEAF2F0);
-  static const textMuted = Color(0xFF7E9A93);
+  static const textPrimary = Color(0xFFF5F5F7);
+  static const textMuted = Color(0xFF96969E);
 
-  static const accentBlue = Color(0xFF31B6E8);
-  static const accentRed = Color(0xFFE8362B);
-  static const accentAmber = Color(0xFFF5A623);
-  static const accentGreen = Color(0xFF3FBF8F);
-  static const onAmber = Color(0xFF12100A);
+  static const accentBlue = Color(0xFF0A84FF);
+  static const accentRed = Color(0xFFFF453A);
+  static const accentAmber = Color(0xFFFFB646);
+  static const accentGreen = Color(0xFF30D158);
+  static const onAmber = Color(0xFF241A06);
+
+  // Kept for the one legacy caller (panelBorder-as-1px-rule in home_shell's
+  // AppBar bottom line); everywhere a card/list border used to live, use
+  // background-tone separation (panelBgAlt/surfaceRaised) or hairline
+  // instead.
+  static const panelBorder = hairline;
 }
 
-/// Monospace "telemetry" text style — the small status-dot + stat-line
-/// device used throughout (pipeline state, counts, timestamps, ids).
-/// Consolas ships with every Windows install, so no font asset is needed.
-const telemetryFont = 'Consolas';
+/// Monospace face — reserved for the few places text is genuinely terminal
+/// output or a literal code (the pipeline's raw log tail, a device-login
+/// code). Everywhere else (stats, timestamps, counts) uses the UI face with
+/// tabular figures instead, so numbers still line up without the whole app
+/// reading as a dev console. Exposed directly (not just via [consoleStyle])
+/// for the couple of `const TextStyle(...)` call sites that need it.
+const consoleFont = 'Consolas';
 
-TextStyle telemetryStyle({Color? color, double size = 12, FontWeight weight = FontWeight.w500}) => TextStyle(
-      fontFamily: telemetryFont,
+TextStyle consoleStyle({Color? color, double size = 12, FontWeight weight = FontWeight.w500}) => TextStyle(
+      fontFamily: consoleFont,
       fontSize: size,
       fontWeight: weight,
       color: color ?? AppColors.textMuted,
       letterSpacing: 0.1,
     );
 
-/// A colored status dot + monospace label — the app's signature micro
-/// element, echoed on every screen that reports live state.
+/// Small stat/timestamp/count text — the UI face (Inter, via the app theme)
+/// with tabular figures so numbers stay aligned wherever they appear.
+TextStyle telemetryStyle({Color? color, double size = 12, FontWeight weight = FontWeight.w500}) => TextStyle(
+      fontSize: size,
+      fontWeight: weight,
+      color: color ?? AppColors.textMuted,
+      letterSpacing: 0.1,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+
+/// A colored status dot + label — the app's signature micro element, echoed
+/// on every screen that reports live state.
 class TelemetryPill extends StatelessWidget {
   final Color dotColor;
   final String label;
@@ -77,6 +105,27 @@ Color stageColor(String stage) {
   }
 }
 
+/// Rough completion fraction for a stage — feeds the small per-row
+/// [StageRing] fill. Approximate by design: the exact percent lives only in
+/// the single active pipeline run's status payload, not per queued project.
+double stageProgress(String stage) {
+  switch (stage) {
+    case 'uploaded':
+      return 1.0;
+    case 'rendered':
+    case 'ready-to-upload':
+      return 0.9;
+    case 'mixed':
+      return 0.7;
+    case 'transitioned':
+      return 0.55;
+    case 'error':
+      return 1.0;
+    default:
+      return 0.15;
+  }
+}
+
 ThemeData buildAppTheme() {
   const scheme = ColorScheme.dark(
     surface: AppColors.bgVoid,
@@ -91,47 +140,54 @@ ThemeData buildAppTheme() {
 
   final base = ThemeData(colorScheme: scheme, useMaterial3: true, scaffoldBackgroundColor: AppColors.bgVoid);
 
+  // Inter — the closest open, embeddable match to SF Pro's proportions.
+  // Applying it once here at the TextTheme level cascades to every plain
+  // `TextStyle(...)` used throughout the app too: a Text widget merges its
+  // own style over the ambient DefaultTextStyle (derived from this
+  // TextTheme), and merge() only overrides fields the caller actually set —
+  // so any inline style that doesn't specify fontFamily inherits Inter
+  // automatically, with no need to touch every call site.
+  final textTheme = GoogleFonts.interTextTheme(base.textTheme).apply(
+    bodyColor: AppColors.textPrimary,
+    displayColor: AppColors.textPrimary,
+  );
+
   return base.copyWith(
-    textTheme: base.textTheme.apply(
-      bodyColor: AppColors.textPrimary,
-      displayColor: AppColors.textPrimary,
-    ),
-    appBarTheme: const AppBarTheme(
+    textTheme: textTheme,
+    appBarTheme: AppBarTheme(
       backgroundColor: AppColors.bgVoid,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
-      titleTextStyle: TextStyle(
+      titleTextStyle: GoogleFonts.inter(
         color: AppColors.textPrimary,
-        fontSize: 20,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -0.3,
+        fontSize: 17,
+        fontWeight: FontWeight.w700,
+        letterSpacing: -0.2,
       ),
-      iconTheme: IconThemeData(color: AppColors.textPrimary),
+      iconTheme: const IconThemeData(color: AppColors.textPrimary),
     ),
     cardTheme: CardThemeData(
       color: AppColors.panelBg,
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 10),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.panelBorder),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
+    hoverColor: AppColors.surfaceRaised,
     listTileTheme: const ListTileThemeData(
       iconColor: AppColors.textMuted,
       textColor: AppColors.textPrimary,
     ),
-    dividerTheme: const DividerThemeData(color: AppColors.panelBorder, space: 32),
+    dividerTheme: const DividerThemeData(color: AppColors.hairline, space: 32, thickness: 1),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: AppColors.panelBgAlt,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.panelBorder),
+        borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.panelBorder),
+        borderSide: BorderSide.none,
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -144,15 +200,15 @@ ThemeData buildAppTheme() {
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.accentAmber,
         foregroundColor: AppColors.onAmber,
-        textStyle: const TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.2),
-        padding: const EdgeInsets.symmetric(vertical: 16),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700, letterSpacing: 0.1),
+        padding: const EdgeInsets.symmetric(vertical: 15),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.textPrimary,
-        side: const BorderSide(color: AppColors.panelBorder),
+        side: const BorderSide(color: AppColors.hairline),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
     ),
@@ -161,7 +217,7 @@ ThemeData buildAppTheme() {
     ),
     chipTheme: base.chipTheme.copyWith(
       backgroundColor: AppColors.panelBgAlt,
-      side: const BorderSide(color: AppColors.panelBorder),
+      side: BorderSide.none,
       labelStyle: const TextStyle(color: AppColors.textMuted, fontSize: 12),
     ),
     progressIndicatorTheme: const ProgressIndicatorThemeData(color: AppColors.accentAmber),
@@ -183,13 +239,10 @@ ThemeData buildAppTheme() {
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: AppColors.panelBg,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.panelBorder),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: AppColors.panelBgAlt,
+      backgroundColor: AppColors.surfaceRaised,
       contentTextStyle: const TextStyle(color: AppColors.textPrimary),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       behavior: SnackBarBehavior.floating,

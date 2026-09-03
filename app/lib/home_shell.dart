@@ -15,9 +15,9 @@ class HomeShell extends StatelessWidget {
       appBar: AppBar(
         leading: Padding(
           padding: const EdgeInsets.all(6),
-          child: Image.asset('assets/newLogo.png'),
+          child: Image.asset('assets/newLogo.png', fit: BoxFit.contain),
         ),
-        title: const Text('Shorts Factory'),
+        title: const Text('AI YouTube Video Generator'),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),

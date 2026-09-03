@@ -83,6 +83,20 @@ class ApiClient {
     return _decode(res);
   }
 
+  Future<dynamic> _delete(String path) async {
+    final headers = _headers();
+    final reqId = headers['X-Request-Id']!;
+    http.Response res;
+    try {
+      res = await _client.delete(_uri(path), headers: headers).timeout(_requestTimeout);
+    } catch (e) {
+      AppLogger.logRequest(reqId, 'DELETE', path, error: e.toString());
+      throw ApiException('Could not reach backend at ${ApiConfig.baseUrl}\n$e');
+    }
+    AppLogger.logRequest(reqId, 'DELETE', path, statusCode: res.statusCode);
+    return _decode(res);
+  }
+
   dynamic _decode(http.Response res) {
     if (res.statusCode >= 200 && res.statusCode < 300) {
       if (res.body.isEmpty) return null;
@@ -126,6 +140,14 @@ class ApiClient {
       }));
 
   Future<Map<String, dynamic>> retrySeed(int seedId) async => Map<String, dynamic>.from(await _post('/api/seeds/$seedId/retry'));
+
+  Future<Map<String, dynamic>> getQueueEntry(int queueId) async => Map<String, dynamic>.from(await _get('/api/queue/$queueId'));
+
+  Future<Map<String, dynamic>> deleteQueueEntry(int queueId) async => Map<String, dynamic>.from(await _delete('/api/queue/$queueId'));
+
+  Future<Map<String, dynamic>> getSeedDetail(int seedId) async => Map<String, dynamic>.from(await _get('/api/seeds/$seedId'));
+
+  Future<Map<String, dynamic>> deleteSeed(int seedId) async => Map<String, dynamic>.from(await _delete('/api/seeds/$seedId'));
 
   Future<Map<String, dynamic>> runPipeline(String output) async =>
       Map<String, dynamic>.from(await _post('/api/pipeline/run', {'output': output}));

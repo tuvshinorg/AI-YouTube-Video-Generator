@@ -15,46 +15,30 @@
 ![YouTube API](https://img.shields.io/badge/YouTube-API%20v3-red.svg)
 ![Whisper](https://img.shields.io/badge/OpenAI-Whisper-black.svg)
 
-## Looking to Hire a Skilled AI/ML Developer?
+## Чадварлаг AI/ML хөгжүүлэгч хайж байна уу?
 
-**Contact: tuvshin.org@gmail.com**
+**Холбоо барих: [tuvshin.org@gmail.com](mailto:tuvshin.org@gmail.com)**
 
 [![Portfolio](https://img.shields.io/badge/💼-Available%20for%20Hire-brightgreen.svg?style=for-the-badge)](mailto:tuvshin.org@gmail.com)
 
 ---
 
-## Download
+## Татаж авах
 
-**[⬇ Download the latest Windows release](https://github.com/tuvshinorg/AI-YouTube-Video-Generator/releases/latest)** — two options on the release page:
+**[⬇ Windows-ийн хамгийн сүүлийн хувилбарыг татах](https://github.com/tuvshinorg/AI-YouTube-Video-Generator/releases/latest)** — release хуудсан дээр хоёр сонголт бий:
 
-- **`AI-YouTube-Video-Generator-Setup-vX.Y.Z.exe`** (recommended) — a normal
-  Windows installer. Run it, click through, get a Start Menu/Desktop
-  shortcut. Installs per-user (no admin/UAC prompt) since the app writes
-  its database and rendered videos directly next to itself.
-- **`AI-YouTube-Video-Generator-Windows-vX.Y.Z.zip`** — the same app as a
-  portable folder; extract anywhere and run `ytgen_manager.exe` directly,
-  no installer.
+* **`AI-YouTube-Video-Generator-Setup-vX.Y.Z.exe`** (санал болгох хувилбар) — энгийн Windows installer. Ажиллуулаад зааврын дагуу суулгахад Start Menu/Desktop shortcut автоматаар үүснэ. App нь database болон render хийсэн видеонуудаа өөрийнхөө хажууд хадгалдаг тул user түвшинд суух бөгөөд admin/UAC permission шаардахгүй.
+* **`AI-YouTube-Video-Generator-Windows-vX.Y.Z.zip`** — яг ижил app-ийн portable хувилбар; хүссэн газраа задлаад `ytgen_manager.exe`-г шууд ажиллуулна, installer шаардлагагүй.
 
-Either way, this build is **fully self-contained** — `pipeline.exe` bundles
-the entire pipeline (CPU-only torch, transformers, Whisper, fastText), so
-no separate Python install is needed at all for the Codex-only path (see
-[AI Providers](#ai-providers)). The only thing you still need is a Codex
-login, which [First Run](#first-run) below walks you through from inside
-the app.
+Аль хувилбарыг сонгосон ч энэ build нь **бүрэн бие даасан** — `pipeline.exe` нь бүх pipeline-ийг (CPU-only torch, transformers, Whisper, fastText) өөртөө багтаасан тул Codex-only замыг ашиглах үед тусдаа Python суулгах шаардлагагүй ([AI Providers](#ai-providers)-г харна уу). Танд хэрэгтэй ганц зүйл нь Codex login бөгөөд доорх [First Run](#first-run) хэсэг app дотроос хэрхэн нэвтрэхийг алхам алхмаар заана.
 
-Building either yourself: `flutter build windows` + `pyinstaller backend.spec`
-+ `pyinstaller pipeline.spec` produce the pieces (see [Flutter Manager
-App](#flutter-manager-app)); `iscc installer.iss` (needs [Inno
-Setup](https://jrsoftware.org/isinfo.php)) turns the assembled release
-folder into the installer.
+Өөрөө build хийх бол: `flutter build windows` + `pyinstaller backend.spec` + `pyinstaller pipeline.spec` нь шаардлагатай хэсгүүдийг үүсгэнэ ([Flutter Manager App](#flutter-manager-app)-г харна уу); `iscc installer.iss` ([Inno Setup](https://jrsoftware.org/isinfo.php) шаардлагатай) нь бэлдсэн release folder-оос installer үүсгэнэ.
 
 ---
 
-## What It Does
+## Юу хийдэг вэ?
 
-Turn an article, an idea, or a topic into a ready-to-post vertical video —
-narration, AI-generated images, subtitles, music, transitions — with one
-button in a native Windows app, or fully unattended via cron/Task Scheduler.
+Нийтлэл, санаа эсвэл сэдвийг шууд нийтлэхэд бэлэн босоо видео болгон хувиргана — narration, AI-аар үүсгэсэн зураг, subtitle, хөгжим, transition бүгдийг нэг товчоор native Windows app дээр хийх эсвэл cron/Task Scheduler ашиглан бүрэн автоматаар ажиллуулах боломжтой.
 
 ```
 Your text / idea
@@ -70,70 +54,42 @@ Your text / idea
   YouTube API → published  (or saved as .mp4 for manual upload)
 ```
 
-Every stage above has a swappable provider — run it fully local (llama.cpp +
-Flux, needs a GPU), fully through a ChatGPT/Codex login (no GPU, no local
-models), or mix and match. See [AI Providers](#ai-providers) below.
+Дээрх үе шат бүрт provider-ийг сольж ашиглах боломжтой — бүрэн local (`llama.cpp` + Flux, GPU шаардлагатай), бүрэн ChatGPT/Codex login-аар (GPU болон local model шаардлагагүй), эсвэл хооронд нь хослуулж болно. Доорх [AI Providers](#ai-providers) хэсгийг харна уу.
 
 ---
 
-## Use Cases
+## Ашиглах боломжууд
 
-- **Faceless YouTube Shorts / TikTok channel** — paste a news article or
-  write an idea, get a narrated, subtitled, vertical video with background
-  music in a few minutes, auto-uploaded or saved for you to review first.
-- **Content repurposing** — turn a blog post, press release, or long-form
-  script into a short-form video without touching an editor.
-- **Bilingual (English/Mongolian) content** — write in either language (or
-  mix scenes across both in the same project) and narration, subtitles, and
-  transcription are all picked automatically per scene — see
-  [Mongolian Language Support](#mongolian-language-support).
-- **No-GPU / low-power machine** — set `AI_PROVIDER=codex` and
-  `IMAGE_PROVIDER=codex` and the entire pipeline (text, images) runs through
-  your Codex/ChatGPT login instead of local models; only subtitles (Whisper)
-  and video compositing (FFmpeg) run locally, and both are CPU-friendly.
-- **Unattended batch production** — queue several ideas, let cron (Linux/WSL)
-  or Windows Task Scheduler run the pipeline on a schedule, and check the
-  "Finished" list in the app whenever you like.
-- **Portfolio / automation reference** — a complete, working example of
-  chaining an LLM, image generation, TTS, ASR, and video composition into
-  one state-machine pipeline with a real desktop UI on top.
+* **Нүүр царайгүй YouTube Shorts / TikTok суваг** — news article paste хийх эсвэл санаагаа бичихэд narration, subtitle, background music бүхий босоо видео хэдхэн минутын дотор үүсэж, автоматаар upload хийх эсвэл эхлээд шалгахын тулд файл болгон хадгална.
+* **Контентыг дахин ашиглах** — blog post, press release эсвэл урт script-ийг video editor нээхгүйгээр short-form видео болгоно.
+* **Хоёр хэлтэй (English/Mongolian) контент** — аль ч хэлээр бичиж болно, тэр ч байтугай нэг project дотор хоёр хэлийг хольж болно. Scene бүрийн narration, subtitle болон transcription автоматаар тохирох хэлээ сонгоно — [Mongolian Language Support](#mongolian-language-support)-г харна уу.
+* **GPU-гүй / хүчин чадал багатай компьютер** — `AI_PROVIDER=codex`, `IMAGE_PROVIDER=codex` тохируулснаар бүх text болон image pipeline таны Codex/ChatGPT login-аар ажиллана. Зөвхөн subtitle (Whisper) болон video compositing (FFmpeg) local ажиллах бөгөөд хоёулаа CPU дээр боломжийн ажиллана.
+* **Хүний оролцоогүй batch production** — хэд хэдэн санааг queue-д нэмээд cron (Linux/WSL) эсвэл Windows Task Scheduler-аар pipeline-ийг хуваарийн дагуу ажиллуулж, дараа нь app-ийн "Finished" жагсаалтаас үр дүнгээ шалгана.
+* **Portfolio / automation жишээ** — LLM, image generation, TTS, ASR болон video composition-ийг нэг state-machine pipeline болгон холбож, дээр нь бодит desktop UI хийсэн бүрэн ажиллагаатай жишээ.
 
 ---
 
-## First Run
+## Анх ажиллуулах
 
-The backend now configures as much of itself as it safely can, and tells
-you clearly about the part it can't:
+Backend одоо аюулгүйгээр автоматаар тохируулж болох бүх зүйлээ өөрөө тохируулж, өөрөө хийж чадахгүй хэсгийг тодорхой зааж өгдөг:
 
-- **Directories, `.env`, and the database are created automatically** the
-  first time the backend starts — no manual `setup.sh` or `create.py` step
-  before the app is even usable.
-- **Language-ID and Mongolian-Whisper models auto-download** (~1 MB and
-  ~3.2 GB respectively) the first time a scene actually needs them — you'll
-  see it happening in the app's Activity log, not a silent multi-minute stall.
-- **Python dependencies are the one thing that genuinely can't be automated
-  invisibly** — the app can't know which Python you want them installed
-  into, or safely run a multi-minute install with no visible progress. If
-  they're missing, the dashboard shows a banner with the exact command to
-  copy, where to run it from, and a "Recheck" button:
+* **Directory, `.env`, database бүгд backend анх эхлэх үед автоматаар үүснэ** — app ашиглаж эхлэхийн өмнө `setup.sh` эсвэл `create.py` гараар ажиллуулах шаардлагагүй.
+* **Language-ID болон Mongolian-Whisper model-ууд автоматаар татагдана** (~1 MB болон ~3.2 GB). Тухайн model анх удаа шаардлагатай scene дээр ашиглагдах үед татагдах бөгөөд Activity log дээр татаж байгааг харуулна. Олон минут юу ч болоогүй мэт гацахгүй.
+* **Python dependency бол бүрэн далд байдлаар автоматжуулах боломжгүй цорын ганц хэсэг** — app таны аль Python environment-д dependency суулгахыг хүсэж байгааг мэдэх боломжгүй бөгөөд progress харуулахгүйгээр олон минут үргэлжлэх install-ийг аюулгүй ажиллуулах боломжгүй. Хэрэв dependency байхгүй бол dashboard дээр ажиллуулах яг command, хаанаас ажиллуулах болон "Recheck" товчтой banner гарна:
 
-  ```
-  ⚠ Python dependencies aren't installed yet
-  pip install -r requirements.txt          [copy]
-  Run it from: C:\...\AI-YouTube-Video-Generator
-  ```
+```bash
+⚠ Python dependencies aren't installed yet
+pip install -r requirements.txt          [copy]
+Run it from: C:\...\AI-YouTube-Video-Generator
+```
 
-- **Codex login** (only shown if `AI_PROVIDER=codex` or `IMAGE_PROVIDER=codex`):
-  a banner offers to install Node.js + the Codex CLI for you (same commands
-  you'd type yourself, just run for you, with the output shown live), then
-  walks you through the device-login flow — open a link, paste a code
-  that's already on your clipboard. No terminal required.
+* **Codex login** (`AI_PROVIDER=codex` эсвэл `IMAGE_PROVIDER=codex` үед л харагдана): banner нь Node.js + Codex CLI-г автоматаар суулгах сонголт өгнө. Таны өөрөө terminal дээр бичих байсан command-уудыг app ажиллуулж, output-ийг live харуулна. Дараа нь device-login flow-оор нэвтрүүлнэ — link нээгээд clipboard дээр автоматаар хуулсан code-ийг paste хийхэд хангалттай. Terminal шаардлагагүй.
 
-Once both banners are gone, "Make the video" works.
+Хоёр banner алга болсны дараа "Make the video" шууд ажиллана.
 
 ---
 
-## Quick Start (from source)
+## Түргэн эхлэх (source-оос)
 
 ```bash
 git clone https://github.com/tuvshinorg/AI-YouTube-Video-Generator.git
@@ -141,26 +97,25 @@ cd AI-YouTube-Video-Generator
 bash setup.sh
 ```
 
-`setup.sh` does the parts that need to happen before Python even runs:
-- Detects your repo path and writes it to `.env`
-- Creates all runtime directories (`logs/`, `temp/*/`, `final/`, `song/*/`, `optic/`, `models/`)
-- Detects CUDA and installs `llama-cpp-python` with GPU support if available
-- Installs all pip dependencies
-- Initializes the SQLite database
-- Installs a cron job (Linux/WSL only — every hour by default)
+`setup.sh` нь Python эхлэхээс өмнө хийх шаардлагатай зүйлсийг гүйцэтгэнэ:
 
-Everything after that (further directory/DB repair, Codex install/login) is
-handled by the app itself on first launch — see [First Run](#first-run).
+* Repo path-ийг илрүүлж `.env` файлд бичнэ
+* Runtime directory-уудыг үүсгэнэ (`logs/`, `temp/*/`, `final/`, `song/*/`, `optic/`, `models/`)
+* CUDA илрүүлээд боломжтой бол `llama-cpp-python`-ийг GPU support-тай суулгана
+* Бүх pip dependency-г суулгана
+* SQLite database initialize хийнэ
+* Cron job суулгана (зөвхөн Linux/WSL — default нь цаг тутам)
 
-**Fastest path (no GPU, no local models):** set these two lines in `.env`
-and skip straight to running the app or `make run-file`:
+Үүнээс хойших бүх зүйл (directory/DB repair, Codex install/login) app анх асах үед автоматаар хийгдэнэ — [First Run](#first-run)-г харна уу.
+
+**Хамгийн хурдан зам (GPU болон local model шаардлагагүй):** `.env` файлд доорх хоёр мөрийг тохируулаад app эсвэл `make run-file`-ийг шууд ажиллуулна:
 
 ```bash
 AI_PROVIDER=codex
 IMAGE_PROVIDER=codex
 ```
 
-**Local/offline path:** fill in a GGUF model and a Flux repo instead:
+**Local/offline зам:** GGUF model болон Flux repo-г тохируулна:
 
 ```bash
 LLAMA_MODEL_PATH=./models/Llama-3.2-3B-Instruct-Q6_K.gguf
@@ -198,7 +153,7 @@ make cli          # or: python cli.py
   q)  Quit
 ```
 
-CLI subcommands also work for scripting:
+CLI subcommand-уудыг scripting-д мөн ашиглаж болно:
 
 ```bash
 python cli.py add-rss                  # validate & import an RSS feed
@@ -211,17 +166,17 @@ python cli.py run --output file        # run now, save .mp4 for manual upload
 python cli.py stop                     # SIGTERM the running pipeline
 ```
 
-### Manual text input
+### Текст гараар оруулах
 
-No RSS feed? Just type:
+RSS feed байхгүй юу? Шууд бичнэ:
 
 ```
 Enter text manually → type or paste → finish with a line containing ---
 ```
 
-The pipeline treats it exactly like an RSS article and generates a full video.
+Pipeline үүнийг RSS article-тэй яг адилхан боловсруулж, бүрэн видео үүсгэнэ.
 
-### JSON import format
+### JSON import формат
 
 ```json
 {
@@ -237,32 +192,19 @@ The pipeline treats it exactly like an RSS article and generates a full video.
 
 ## Flutter Manager App
 
-A native Windows desktop app (`app/`) is the primary way to run this —
-paste an idea, watch it render live, browse and delete finished/queued/
-errored projects, and manage Codex login, all from one window. It talks to
-a small FastAPI backend (`api.py`, packaged as `backend.exe`) that wraps
-the same operations as `cli.py`.
+Native Windows desktop app (`app/`) нь энэ төслийг ажиллуулах үндсэн интерфэйс юм — санаагаа paste хийх, render явцыг live харах, finished/queued/errored project-уудыг үзэх, устгах, Codex login удирдах бүгдийг нэг цонхоос хийнэ. Энэ нь `cli.py`-ийн адил үйлдлүүдийг wrap хийсэн жижиг FastAPI backend (`api.py`, `backend.exe` болгон package хийгдсэн)-тэй холбогдоно.
 
-**The app owns the backend's whole lifecycle** — it spawns `backend.exe`
-itself on a random port with a random auth token, and shuts it down when
-the window closes (or Windows does, if the app is force-killed). There's
-nothing to start manually and nothing to type in — see
-[`docs/CONNECTION.md`](docs/CONNECTION.md) for exactly how, plus a walked
-acceptance checklist.
+**App backend-ийн бүх lifecycle-ийг өөрөө удирдана** — `backend.exe`-г random port болон random auth token ашиглан өөрөө асааж, app хаагдах үед унтраана (эсвэл app force-kill хийгдвэл Windows унтраана). Гараар server асаах, ямар нэг command бичих шаардлагагүй — яг хэрхэн ажилладгийг болон acceptance checklist-ийг [`docs/CONNECTION.md`](docs/CONNECTION.md)-ээс харна уу.
 
-**1. Build the backend once (or after changing `api.py`):**
+**1. Backend-ийг нэг удаа build хийх (эсвэл `api.py` өөрчилсний дараа):**
 
 ```bash
 make backend-exe    # pyinstaller -> dist/backend/, copied into app/windows/backend/
 ```
 
-`backend.exe` deliberately stays small (~35 MB unpacked) — it never imports
-torch/transformers/whisper/llama-cpp itself, only `pipeline.py` does, run
-as a normal Python subprocess. That's also why installing Python
-dependencies (see [First Run](#first-run)) can't be skipped by using the
-prebuilt exe alone.
+`backend.exe` зориудаар жижиг (~35 MB unpacked) хэвээр үлддэг — torch/transformers/whisper/llama-cpp-ийг өөрөө import хийдэггүй. Зөвхөн `pipeline.py` нь эдгээрийг import хийгээд ердийн Python subprocess хэлбэрээр ажиллана. Иймээс prebuilt exe ашигласан ч Python dependency суулгах алхмыг алгасах боломжгүй ([First Run](#first-run)-г харна уу).
 
-**2. Run or build the app:**
+**2. App-ийг ажиллуулах эсвэл build хийх:**
 
 ```bash
 cd app
@@ -270,98 +212,64 @@ flutter run -d windows          # dev
 flutter build windows           # → app/build/windows/x64/runner/Release/
 ```
 
-That's it — launching either one spawns the backend automatically.
+Ингээд л боллоо — аль нэгийг нь ажиллуулахад backend автоматаар асна.
 
-**Dev mode** (hot-reload the UI against a manually-started backend, e.g.
-`uvicorn api:app --reload`): set `YTGEN_BACKEND_URL` (and optionally
-`YTGEN_BACKEND_TOKEN`) and pass `--dev`:
+**Dev mode** (UI дээр hot-reload ашиглан manually эхлүүлсэн backend-тэй ажиллах, жишээ нь `uvicorn api:app --reload`): `YTGEN_BACKEND_URL` (мөн шаардлагатай бол `YTGEN_BACKEND_TOKEN`) тохируулаад `--dev` дамжуулна:
 
 ```bash
 YTGEN_BACKEND_URL=http://127.0.0.1:8000 flutter run -d windows -- --dev
 ```
 
-> Android support was scaffolded and works the same way, but the platform
-> folder was removed for now. Re-add it anytime with
-> `flutter create --platforms=android .` from inside `app/`.
+> Android support өмнө нь scaffold хийгдсэн бөгөөд ижил зарчмаар ажилладаг боловч platform folder-ийг одоогоор устгасан. Хүссэн үедээ `app/` folder дотроос `flutter create --platforms=android .` ажиллуулаад буцааж үүсгэж болно.
 
 ---
 
-## AI Providers
+## AI Provider-ууд
 
-Every AI-driven stage picks its provider independently via `.env` — mix and
-match based on what hardware/accounts you have.
+AI ашигладаг үе шат бүр `.env`-ээр provider-оо тусдаа сонгодог — өөрийн hardware/account-аас хамааран хольж ашиглаж болно.
 
-| Stage | Env var | Options | Notes |
-|---|---|---|---|
-| Text (scenes, title, description) | `AI_PROVIDER` | `llama` (default) · `codex` | `llama` runs a local GGUF via llama.cpp — needs a GPU for reasonable speed. `codex` shells out to the Codex CLI — no GPU, but needs a Codex/ChatGPT login. |
-| Images | `IMAGE_PROVIDER` | `flux` (default) · `openai` · `codex` | `flux` runs locally via HuggingFace diffusers — needs a GPU. `openai` calls the Images API (billed, needs `OPENAI_API_KEY`). `codex` uses Codex's built-in `image_gen` tool — same login as `AI_PROVIDER=codex`, no separate key or billing. |
-| Subtitles | *(automatic)* | generic Whisper · Mongolian fine-tune | Always runs locally. Per-scene language detection (see below) picks the right model — no config needed. |
-| Narration voice | *(automatic)* | `TTS_VOICE` · `TTS_VOICE_MN` | Same per-scene language detection picks the voice. |
+| Үе шат                            | Env var          | Сонголтууд                            | Тайлбар                                                                                                                                                                                                                                                                                            |
+| --------------------------------- | ---------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Text (scenes, title, description) | `AI_PROVIDER`    | `llama` (default) · `codex`           | `llama` нь local GGUF-ийг llama.cpp ашиглан ажиллуулна — боломжийн хурдтай ажиллуулахын тулд GPU хэрэгтэй. `codex` нь Codex CLI-г ажиллуулна — GPU шаардлагагүй боловч Codex/ChatGPT login хэрэгтэй.                                                                                               |
+| Images                            | `IMAGE_PROVIDER` | `flux` (default) · `openai` · `codex` | `flux` HuggingFace diffusers ашиглан local ажиллана — GPU шаардлагатай. `openai` Images API дуудна (төлбөртэй, `OPENAI_API_KEY` шаардлагатай). `codex` Codex-ийн built-in `image_gen` tool ашиглана — `AI_PROVIDER=codex`-тэй ижил login ашиглах бөгөөд тусдаа API key эсвэл billing шаардлагагүй. |
+| Subtitles                         | *(automatic)*    | generic Whisper · Mongolian fine-tune | Үргэлж local ажиллана. Scene бүрийн language detection тохирох model-ийг автоматаар сонгоно — config шаардлагагүй.                                                                                                                                                                                 |
+| Narration voice                   | *(automatic)*    | `TTS_VOICE` · `TTS_VOICE_MN`          | Scene бүрийн language detection тохирох voice-ийг мөн автоматаар сонгоно.                                                                                                                                                                                                                          |
 
-**The zero-GPU path:** `AI_PROVIDER=codex` + `IMAGE_PROVIDER=codex` needs no
-local models and no dedicated GPU at all — only Whisper (CPU-friendly) and
-FFmpeg run locally. This is what [First Run](#first-run)'s Codex banner is for.
+**GPU огт хэрэггүй зам:** `AI_PROVIDER=codex` + `IMAGE_PROVIDER=codex` нь local model болон dedicated GPU огт шаарддаггүй — зөвхөн Whisper (CPU-friendly) болон FFmpeg local ажиллана. [First Run](#first-run) хэсгийн Codex banner яг үүнд зориулагдсан.
 
-### About using Codex this way
+### Codex-ийг ийм байдлаар ашиглах тухай
 
-- **Auth is whatever `codex login` is signed into.** If that's a ChatGPT
-  Plus/Pro login rather than an API key, know that it's designed for
-  interactive terminal sessions on one device, not unattended backend
-  automation — using it this way may run against OpenAI's usage terms.
-  That's your call to make for your own account, not something this
-  project enforces either way.
-- **Starting a new login ends the old one immediately**, even if the new
-  one is never completed — there's no "cancel and keep the old session."
-- **Codex has its own usage limits.** The pipeline paces successive image
-  calls (`CODEX_IMAGE_DELAY`, default 180s) to stay under them — a project
-  with several scenes can take a while to fully render; that pacing is
-  intentional, not the app being stuck (the Activity log says so explicitly).
+* **Auth нь `codex login` ямар account-аар нэвтэрснээс хамаарна.** Хэрэв API key биш ChatGPT Plus/Pro login ашиглаж байгаа бол энэ login нь нэг төхөөрөмж дээр interactive terminal session-д зориулагдсан бөгөөд unattended backend automation-д зориулагдаагүй гэдгийг анхаарна уу — ийм байдлаар ашиглах нь OpenAI-ийн usage terms-тэй зөрчилдөж болзошгүй. Өөрийн account дээр хэрхэн ашиглахаа та өөрөө шийднэ; энэ project аль нэг хувилбарыг албаддаггүй.
+* **Шинэ login эхлүүлэхэд хуучин login шууд дуусна**, шинэ login процесс бүрэн дуусаагүй байсан ч гэсэн — "cancel хийгээд хуучин session-аа хадгалах" боломжгүй.
+* **Codex өөрийн usage limit-тэй.** Pipeline нь дараалсан image call-уудын хооронд (`CODEX_IMAGE_DELAY`, default 180s) pause хийж limit-ээс хэтрэхээс сэргийлдэг. Олон scene-тэй project бүрэн render болоход хугацаа орж болно; энэ delay нь зориудын бөгөөд app гацсан гэсэн үг биш (Activity log үүнийг тодорхой харуулна).
 
 ---
 
-## Mongolian Language Support
+## Монгол хэлний дэмжлэг
 
-Any scene text — regardless of what language the rest of the project is
-in — is run through a real language-identification model
-([fastText's `lid.176`](https://fasttext.cc/docs/en/language-identification.html),
-176 languages, auto-downloads ~1MB on first use) before narration and
-subtitles are generated for it:
+Project-ийн бусад хэсэг ямар хэл дээр байхаас үл хамааран scene бүрийн text narration болон subtitle үүсгэхээс өмнө бодит language-identification model болох [fastText-ийн `lid.176`](https://fasttext.cc/docs/en/language-identification.html) (176 хэл, анхны хэрэглээнд ~1 MB автоматаар татагдана)-оор шалгагдана:
 
-- **Detected as Mongolian (`mn`)** → narration uses `TTS_VOICE_MN`
-  (`mn-MN-YesuiNeural` by default), and subtitles are transcribed with
-  [`Tsedee/whisper-large-v3-turbo-mn-2`](https://huggingface.co/Tsedee/whisper-large-v3-turbo-mn-2),
-  a Whisper fine-tune substantially more accurate on Mongolian speech than
-  the generic model. Auto-downloads (~3.2 GB) the first time a Mongolian
-  scene is actually transcribed.
-- **Anything else** → the normal `TTS_VOICE` and the generic multilingual
-  Whisper model — including Russian, Ukrainian, Kazakh, and other
-  Cyrillic-script languages, which are *not* Mongolian and are not routed
-  to the Mongolian-specific models.
+* **Монгол (`mn`) гэж танигдсан бол** → narration-д `TTS_VOICE_MN` (`mn-MN-YesuiNeural` default) ашиглана, subtitle transcription-д [`Tsedee/whisper-large-v3-turbo-mn-2`](https://huggingface.co/Tsedee/whisper-large-v3-turbo-mn-2) ашиглана. Энэ нь generic model-оос Монгол яриаг мэдэгдэхүйц илүү зөв таньдаг Whisper fine-tune юм. Монгол scene анх удаа transcription хийх үед ~3.2 GB model автоматаар татагдана.
+* **Бусад бүх хэл** → ердийн `TTS_VOICE` болон generic multilingual Whisper model ашиглана. Үүнд Russian, Ukrainian, Kazakh болон бусад Cyrillic script ашигладаг хэлүүд багтана — тэдгээрийг Монгол гэж үзэж Mongolian-specific model руу явуулахгүй.
 
-This is real classification, not a "contains Cyrillic characters" guess —
-the two extra Mongolian Cyrillic letters (Өө, Үү) plus every other
-Cyrillic-script language would have made a script-based check
-indistinguishable from actual Mongolian.
+Энэ нь "Cyrillic character байгаа эсэх" гэсэн энгийн таамаг биш, бодит classification юм — Монгол хэлний хоёр нэмэлт Cyrillic үсэг (Өө, Үү) байсан ч зөвхөн script шалгавал бусад Cyrillic хэлнээс найдвартай ялгах боломжгүй.
 
 ---
 
-## Output Modes
+## Output Mode-ууд
 
-| Mode | Command | Result |
-|------|---------|--------|
-| **api** (default) | `make run` | Full pipeline → auto-upload to YouTube |
-| **file** | `make run-file` | Full pipeline → `.mp4` saved in `final/` for manual upload |
+| Mode              | Command         | Үр дүн                                                                               |
+| ----------------- | --------------- | ------------------------------------------------------------------------------------ |
+| **api** (default) | `make run`      | Full pipeline → YouTube руу автоматаар upload                                        |
+| **file**          | `make run-file` | Full pipeline → `.mp4` файл `final/` дотор хадгалагдаж, гараар upload хийх боломжтой |
 
-The Flutter app's "Make the video" button always uses `file` mode — YouTube
-upload needs OAuth credentials the app doesn't set up for you (see
-[YouTube API Setup](#youtube-api-setup)); use `make run` or the CLI for the
-auto-upload path.
+Flutter app-ийн "Make the video" товч үргэлж `file` mode ашиглана — YouTube upload хийхэд OAuth credential хэрэгтэй бөгөөд app үүнийг өөрөө тохируулдаггүй ([YouTube API Setup](#youtube-api-setup)-г харна уу). Auto-upload хийх бол `make run` эсвэл CLI ашиглана.
 
 ---
 
-## Make Targets
+## Make Target-ууд
 
-```
+```bash
 make setup        first-time install + cron
 make cli          interactive manager
 make api          REST API for the Flutter manager app
@@ -386,69 +294,64 @@ make cron-remove  remove the pipeline cron entry
 
 ---
 
-## Configuration (`.env`)
+## Тохиргоо (`.env`)
 
-Copy `.env.example` to `.env` and edit (the app also does this
-automatically on first launch if `.env` is missing — see [First
-Run](#first-run)):
+`.env.example`-ийг `.env` болгон хуулж тохируулна (хэрэв `.env` байхгүй бол app анх асахдаа үүнийг автоматаар хийдэг — [First Run](#first-run)-г харна уу):
 
 ```bash
 cp .env.example .env
 ```
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BASE_DIR` | auto-detected | Absolute path to the repo |
-| `AI_PROVIDER` | `llama` | `llama` (local llama.cpp) or `codex` (Codex CLI, text only) |
-| `CODEX_TIMEOUT` | `120` | Overall ceiling (seconds) for one text `codex exec` call |
-| `LLAMA_MODEL_PATH` | `./models/Llama-3.2-3B-Instruct-Q6_K.gguf` | Path to your GGUF model |
-| `LLAMA_N_CTX` | `4096` | LLM context window (tokens) |
-| `LLAMA_N_GPU` | `-1` | GPU layers: `-1` = all on GPU, `0` = CPU only |
-| `LLAMA_VERBOSE` | `false` | Show llama.cpp token output |
-| `IMAGE_PROVIDER` | `flux` | `flux` (local), `openai` (Images API), or `codex` (Codex's image_gen tool) |
-| `CODEX_IMAGE_TIMEOUT` | `240` | Overall ceiling (seconds) for one image `codex exec` call |
-| `CODEX_IMAGE_DELAY` | `180` | Pause between successive Codex image calls, to stay under its usage limit |
-| `CODEX_STARTUP_IDLE_TIMEOUT` | `180` | Kill a `codex exec` call early if it produces zero activity for this long (catches a genuine hang fast without cutting off a slow-but-working start) |
-| `FLUX_MODEL_ID` | `enhanceaiteam/Flux-Uncensored-V2` | Any Flux-compatible HuggingFace repo |
-| `FLUX_CPU_OFFLOAD` | `true` | Offload model to CPU between calls (saves VRAM) |
-| `FLUX_WIDTH` / `FLUX_HEIGHT` | `540` / `960` | Output image size (portrait, for Shorts) |
-| `FLUX_STEPS` | `20` | Diffusion steps |
-| `FLUX_GUIDANCE` | `3.5` | Guidance scale |
-| `OPENAI_API_KEY` | — | Used only when `IMAGE_PROVIDER=openai` |
-| `OPENAI_IMAGE_MODEL` | `gpt-image-1` | OpenAI Images API model |
-| `OPENAI_IMAGE_SIZE` | `1024x1536` | Portrait, matching the Flux default aspect |
-| `TTS_VOICE` | `en-US-AvaNeural` | Edge TTS voice (run `edge-tts --list-voices`) |
-| `TTS_VOICE_MN` | `mn-MN-YesuiNeural` | Auto-selected for scenes detected as Mongolian — see [Mongolian Language Support](#mongolian-language-support) |
-| `WHISPER_MODEL_MN` | `Tsedee/whisper-large-v3-turbo-mn-2` | Whisper fine-tune used for scenes detected as Mongolian |
-| `YT_CLIENT_SECRET` | `client_secret.json` | YouTube OAuth client secret filename |
-| `YT_CREDENTIALS` | `credentials.storage` | OAuth token storage filename |
-| `API_PORT` | `8000` | Port for `python api.py` / `make api` dev mode only |
-| `PYTHON_EXECUTABLE` | — | Required only inside a frozen `backend.exe` — point at the Python this project's dependencies are installed into |
+| Variable                     | Default                                    | Тайлбар                                                                                                           |
+| ---------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `BASE_DIR`                   | auto-detected                              | Repo-ийн absolute path                                                                                            |
+| `AI_PROVIDER`                | `llama`                                    | `llama` (local llama.cpp) эсвэл `codex` (Codex CLI, зөвхөн text)                                                  |
+| `CODEX_TIMEOUT`              | `120`                                      | Нэг text `codex exec` call-ийн нийт дээд хугацаа (секунд)                                                         |
+| `LLAMA_MODEL_PATH`           | `./models/Llama-3.2-3B-Instruct-Q6_K.gguf` | GGUF model-ийн path                                                                                               |
+| `LLAMA_N_CTX`                | `4096`                                     | LLM context window (tokens)                                                                                       |
+| `LLAMA_N_GPU`                | `-1`                                       | GPU layers: `-1` = бүгд GPU дээр, `0` = зөвхөн CPU                                                                |
+| `LLAMA_VERBOSE`              | `false`                                    | llama.cpp token output харуулах                                                                                   |
+| `IMAGE_PROVIDER`             | `flux`                                     | `flux` (local), `openai` (Images API), эсвэл `codex` (Codex-ийн image_gen tool)                                   |
+| `CODEX_IMAGE_TIMEOUT`        | `240`                                      | Нэг image `codex exec` call-ийн нийт дээд хугацаа (секунд)                                                        |
+| `CODEX_IMAGE_DELAY`          | `180`                                      | Codex usage limit-ээс хэтрэхгүй байхын тулд дараалсан image call-уудын хооронд хүлээх хугацаа                     |
+| `CODEX_STARTUP_IDLE_TIMEOUT` | `180`                                      | `codex exec` тодорхой хугацаанд ямар ч activity үзүүлэхгүй бол эрт terminate хийх хугацаа                         |
+| `FLUX_MODEL_ID`              | `enhanceaiteam/Flux-Uncensored-V2`         | Flux-compatible ямар ч HuggingFace repo                                                                           |
+| `FLUX_CPU_OFFLOAD`           | `true`                                     | Call хооронд model-ийг CPU руу offload хийх (VRAM хэмнэнэ)                                                        |
+| `FLUX_WIDTH` / `FLUX_HEIGHT` | `540` / `960`                              | Output image хэмжээ (Shorts-д зориулсан portrait)                                                                 |
+| `FLUX_STEPS`                 | `20`                                       | Diffusion steps                                                                                                   |
+| `FLUX_GUIDANCE`              | `3.5`                                      | Guidance scale                                                                                                    |
+| `OPENAI_API_KEY`             | —                                          | Зөвхөн `IMAGE_PROVIDER=openai` үед ашиглана                                                                       |
+| `OPENAI_IMAGE_MODEL`         | `gpt-image-1`                              | OpenAI Images API model                                                                                           |
+| `OPENAI_IMAGE_SIZE`          | `1024x1536`                                | Portrait, Flux-ийн default aspect-тай таарна                                                                      |
+| `TTS_VOICE`                  | `en-US-AvaNeural`                          | Edge TTS voice (`edge-tts --list-voices` ажиллуулж жагсаалтыг харна)                                              |
+| `TTS_VOICE_MN`               | `mn-MN-YesuiNeural`                        | Монгол scene илрэхэд автоматаар сонгогдоно — [Mongolian Language Support](#mongolian-language-support)-г харна уу |
+| `WHISPER_MODEL_MN`           | `Tsedee/whisper-large-v3-turbo-mn-2`       | Монгол scene-д ашиглагдах Whisper fine-tune                                                                       |
+| `YT_CLIENT_SECRET`           | `client_secret.json`                       | YouTube OAuth client secret filename                                                                              |
+| `YT_CREDENTIALS`             | `credentials.storage`                      | OAuth token storage filename                                                                                      |
+| `API_PORT`                   | `8000`                                     | Зөвхөн `python api.py` / `make api` dev mode-д ашиглагдах port                                                    |
+| `PYTHON_EXECUTABLE`          | —                                          | Зөвхөн frozen `backend.exe` дотор шаардлагатай — энэ project-ийн dependency суусан Python руу заана               |
 
 ---
 
-## System Requirements
+## Системийн шаардлага
 
-The desktop app itself is Windows-only (Flutter Windows + Win32 APIs for
-backend process lifecycle). `pipeline.py`/`cli.py` are plain Python and run
-on Linux/macOS too if you're not using the Flutter app.
+Desktop app нь Windows-only (Flutter Windows + backend process lifecycle-д Win32 API ашиглана). Харин `pipeline.py`/`cli.py` нь энгийн Python тул Flutter app ашиглахгүй бол Linux/macOS дээр мөн ажиллана.
 
-Requirements depend heavily on which providers you pick (see [AI
-Providers](#ai-providers)):
+Ямар provider сонгосноос requirement ихээхэн хамаарна ([AI Providers](#ai-providers)-г харна уу):
 
-| Component | Codex path (`AI_PROVIDER=codex` + `IMAGE_PROVIDER=codex`) | Local path (`llama` + `flux`) |
-|-----------|---|---|
-| GPU / VRAM | Not required | 8 GB minimum, 16 GB+ recommended |
-| RAM | 8 GB | 16–32 GB |
-| Storage | ~5 GB (models auto-download as needed) | 20–50 GB (GGUF + Flux weights) |
-| Account | ChatGPT/Codex login | None |
-| ffmpeg | Required either way | Required either way |
+| Component  | Codex path (`AI_PROVIDER=codex` + `IMAGE_PROVIDER=codex`) | Local path (`llama` + `flux`)        |
+| ---------- | --------------------------------------------------------- | ------------------------------------ |
+| GPU / VRAM | Шаардлагагүй                                              | Хамгийн багадаа 8 GB, 16 GB+ зөвлөмж |
+| RAM        | 8 GB                                                      | 16–32 GB                             |
+| Storage    | ~5 GB (model хэрэгтэй үедээ автоматаар татагдана)         | 20–50 GB (GGUF + Flux weights)       |
+| Account    | ChatGPT/Codex login                                       | Шаардлагагүй                         |
+| ffmpeg     | Аль ч замд шаардлагатай                                   | Аль ч замд шаардлагатай              |
 
 ---
 
-## Directory Structure
+## Directory бүтэц
 
-```
+```text
 AI-YouTube-Video-Generator/
 ├── pipeline.py          unified pipeline (all 10 modules)
 ├── cli.py               interactive CLI manager
@@ -495,21 +398,21 @@ AI-YouTube-Video-Generator/
 
 ---
 
-## YouTube API Setup
+## YouTube API тохиргоо
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a project → enable **YouTube Data API v3**
-3. Create OAuth 2.0 credentials (Desktop app)
-4. Download `client_secret.json` → place in repo root
-5. First upload run opens a browser for OAuth consent — token is saved automatically
+1. [Google Cloud Console](https://console.cloud.google.com/) руу орно
+2. Project үүсгээд **YouTube Data API v3**-г enable хийнэ
+3. OAuth 2.0 credentials үүсгэнэ (Desktop app)
+4. `client_secret.json` татаж аваад repo root-д байрлуулна
+5. Анхны upload ажиллах үед browser нээгдэж OAuth consent авна — token автоматаар хадгалагдана
 
 ---
 
-## Cron (Automated Scheduling)
+## Cron (Автомат хуваарь)
 
-`setup.sh` installs a cron entry automatically (Linux/WSL). Default: every hour.
+`setup.sh` нь cron entry-г автоматаар суулгана (Linux/WSL). Default нь цаг тутам.
 
-To change the schedule, edit line `CRON_SCHEDULE` in `setup.sh` before running it:
+Schedule өөрчлөхийн тулд ажиллуулахаас өмнө `setup.sh` доторх `CRON_SCHEDULE` мөрийг өөрчилнө:
 
 ```bash
 CRON_SCHEDULE="0 * * * *"    # every hour (default)
@@ -517,103 +420,93 @@ CRON_SCHEDULE="0 */6 * * *"  # every 6 hours
 CRON_SCHEDULE="0 2 * * *"    # daily at 02:00
 ```
 
-The pipeline uses a lock file (`pipeline.lock`) so concurrent runs are safely refused.
+Pipeline нь lock file (`pipeline.lock`) ашигладаг тул зэрэгцээ хоёр run эхлэхээс аюулгүй хамгаална.
 
 ```bash
 make cron-show      # see installed cron entry
 make cron-remove    # remove it
 ```
 
-Cron output goes to `logs/cron.log`. On native Windows without WSL, use
-Windows Task Scheduler to run `python pipeline.py` on a schedule instead,
-or just use the Flutter app's "Run now" button interactively.
+Cron output `logs/cron.log` файлд бичигдэнэ. Native Windows дээр WSL ашиглахгүй бол Windows Task Scheduler-аар `python pipeline.py`-г schedule хийж болно, эсвэл Flutter app-ийн "Run now" товчоор гараар ажиллуулна.
 
 ---
 
-## Pipeline Modules
+## Pipeline Module-ууд
 
-| # | Module | What it does |
-|---|--------|-------------|
-| 01 | **feed** | Text/RSS queue → LLM (llama.cpp or Codex) generates 6 scenes: narration + image prompt + title + description + music genre |
-| 02 | **image** | One AI image per scene, via Flux, OpenAI Images, or Codex's `image_gen` tool |
-| 03 | **voice** | Narration → speech via Edge TTS, auto-selecting a Mongolian voice per scene when detected |
-| 04 | **clip** | Combines image + audio + optical flare into a video clip per scene |
-| 05 | **subtitle** | Transcribes audio with Whisper (generic or Mongolian-finetuned, auto-selected) → burns word-level highlighted subtitles |
-| 06 | **transition** | Concatenates scene clips with smooth transitions |
-| 07 | **mix** | Overlays background music (genre chosen by the LLM), applies echo/EQ, normalises |
-| 08 | **final** | Merges video + mixed audio → `final/{seedId}.mp4` |
-| 09 | **upload** | Uploads to YouTube with title + description (skipped in `--output file` mode) |
-| 10 | **clean** | Deletes temp files for uploaded videos |
+| #  | Module         | Юу хийдэг                                                                                                                                                 |
+| -- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01 | **feed**       | Text/RSS queue → LLM (`llama.cpp` эсвэл Codex) ашиглан narration + image prompt + title + description + music genre бүхий 6 scene үүсгэнэ                 |
+| 02 | **image**      | Scene бүрт Flux, OpenAI Images эсвэл Codex-ийн `image_gen` tool ашиглан нэг AI image үүсгэнэ                                                              |
+| 03 | **voice**      | Narration → Edge TTS-аар speech үүсгэнэ, Монгол scene илрэхэд Монгол voice автоматаар сонгоно                                                             |
+| 04 | **clip**       | Image + audio + optical flare-ийг нэгтгэн scene бүрийн video clip үүсгэнэ                                                                                 |
+| 05 | **subtitle**   | Whisper (generic эсвэл автоматаар сонгогдох Mongolian fine-tune) ашиглан audio transcription хийж, word-level highlighted subtitle видеон дээр burn хийнэ |
+| 06 | **transition** | Scene clip-үүдийг smooth transition ашиглан холбоно                                                                                                       |
+| 07 | **mix**        | Background music (LLM сонгосон genre) давхарлаж, echo/EQ болон normalisation хийнэ                                                                        |
+| 08 | **final**      | Video + mixed audio нэгтгээд `final/{seedId}.mp4` үүсгэнэ                                                                                                 |
+| 09 | **upload**     | Title + description-тай YouTube руу upload хийнэ (`--output file` mode үед алгасана)                                                                      |
+| 10 | **clean**      | Upload хийгдсэн video-ны temp file-уудыг устгана                                                                                                          |
 
-Every stage that can fail records the failure against its project
-(`seedErrorStep`/`seedErrorMsg`) so it surfaces as "Needs attention" in the
-app — projects don't silently sit in "in progress" forever with no visible
-reason why.
+Алдаа гарч болох үе шат бүр project дээр failure мэдээллийг (`seedErrorStep`/`seedErrorMsg`) хадгалдаг тул app-ийн "Needs attention" хэсэгт шууд харагдана — project ямар ч тайлбаргүйгээр "in progress" дээр үүрд гацахгүй.
 
 ---
 
-## Troubleshooting
+## Алдаа засах
 
-**Dashboard shows "Python dependencies aren't installed yet"**
-Run the exact command the banner shows (`pip install -r requirements.txt`
-from the repo root), then click "Recheck". See [First Run](#first-run).
+**Dashboard дээр "Python dependencies aren't installed yet" гарч байна**
 
-**A project sits in "In progress" with no error**
-Should not happen anymore — every pipeline stage now records a failure
-against the project so it surfaces under "Needs attention" instead. If you
-still see this, please open an issue with the relevant lines from
-`logs/pipeline.log`.
+Banner дээр харагдаж байгаа яг command-ийг (`pip install -r requirements.txt`) repo root-оос ажиллуулаад "Recheck" дарна. [First Run](#first-run)-г харна уу.
 
-**Codex image/text calls time out**
-`CODEX_STARTUP_IDLE_TIMEOUT` (default 180s) kills a call that produces zero
-activity for that long — a genuine hang, not a slow-but-working one. If you
-see `"no activity for Ns"` failures on a slow connection or with several
-reference images attached, raise it in `.env`. `CODEX_IMAGE_TIMEOUT` /
-`CODEX_TIMEOUT` are the overall per-call ceilings, separate from that.
+**Project "In progress" дээр алдаагүй гацсан**
 
-**`LLAMA_MODEL_PATH` not found**
-Only relevant if `AI_PROVIDER=llama`. Download a GGUF from HuggingFace and
-set the path in `.env` — or switch to `AI_PROVIDER=codex` to skip local
-models entirely.
+Одоо ийм зүйл гарах ёсгүй — pipeline-ийн үе шат бүр failure мэдээллийг project дээр хадгалдаг тул "Needs attention" хэсэг рүү орно. Хэрэв ийм асуудал гарсаар байвал `logs/pipeline.log`-ийн холбогдох мөрүүдтэй issue нээнэ үү.
 
-**Flux out of VRAM**
-Only relevant if `IMAGE_PROVIDER=flux`. Set `FLUX_CPU_OFFLOAD=true` in
-`.env` (enabled by default), use a smaller model like
-`black-forest-labs/FLUX.1-schnell`, or switch to `IMAGE_PROVIDER=codex`.
+**Codex image/text call timeout болж байна**
 
-**YouTube upload fails with 403**
-OAuth token expired — delete `credentials.storage` and run `make upload` once to re-authenticate.
+`CODEX_STARTUP_IDLE_TIMEOUT` (default 180s) нь тухайн call ямар ч activity гаргалгүй энэ хугацаанд байвал terminate хийнэ — энэ нь удаан боловч ажиллаж байгаа call биш, жинхэнэ hang-ийг илрүүлэх зориулалттай. Удаан internet connection эсвэл олон reference image ашиглах үед `"no activity for Ns"` failure гарвал `.env` доторх утгыг нэмэгдүүлнэ. `CODEX_IMAGE_TIMEOUT` / `CODEX_TIMEOUT` нь үүнээс тусдаа нийт per-call timeout юм.
+
+**`LLAMA_MODEL_PATH` олдохгүй байна**
+
+Зөвхөн `AI_PROVIDER=llama` үед хамаарна. HuggingFace-аас GGUF татаж аваад `.env` дотор path-ийг тохируулна — эсвэл local model алгасахын тулд `AI_PROVIDER=codex` болгон солино.
+
+**Flux VRAM хүрэхгүй байна**
+
+Зөвхөн `IMAGE_PROVIDER=flux` үед хамаарна. `.env` дотор `FLUX_CPU_OFFLOAD=true` тохируулна (default-оор enabled), `black-forest-labs/FLUX.1-schnell` шиг жижиг model ашиглана, эсвэл `IMAGE_PROVIDER=codex` руу шилжинэ.
+
+**YouTube upload 403 алдаа өгч байна**
+
+OAuth token хугацаа дууссан — `credentials.storage`-г устгаад `make upload`-ийг нэг удаа ажиллуулж дахин authentication хийнэ.
 
 **Pipeline already running (lock file)**
-A previous run crashed and left the lock. Use `python cli.py stop` or `rm pipeline.lock`.
+
+Өмнөх run crash хийгээд lock үлдээсэн байна. `python cli.py stop` эсвэл `rm pipeline.lock` ашиглана.
 
 **Logs**
-All modules log to `logs/pipeline.log` (UTF-8 — safe for non-English
-scenes) and to stdout. Cron output goes to `logs/cron.log`. The Flutter
-app's own log folder is reachable from Settings → "Open log folder".
+
+Бүх module `logs/pipeline.log` файлд (UTF-8 — non-English scene-д асуудалгүй) болон stdout руу log бичнэ. Cron output `logs/cron.log` руу бичигдэнэ. Flutter app-ийн өөрийн log folder-ийг Settings → "Open log folder" хэсгээс нээж болно.
 
 ---
 
-## About the Developer
+## Хөгжүүлэгчийн тухай
 
-**Available for hire** — AI/ML Engineer specialising in end-to-end automation pipelines.
+**Ажилд авах боломжтой** — end-to-end automation pipeline чиглэлээр мэргэшсэн AI/ML Engineer.
 
-**Skills demonstrated in this project:**
-- Multi-provider AI orchestration (local llama.cpp/Flux, OpenAI APIs, Codex CLI) behind one interface
-- Real language identification (fastText) driving per-scene voice/model selection, not string heuristics
-- HuggingFace diffusers + Flux image generation, and `transformers`-based ASR fine-tune integration
-- FFmpeg media processing pipeline (clips, subtitles, transitions, audio mixing)
-- Whisper speech-to-text for word-level subtitle alignment
-- YouTube Data API v3 + OAuth2
-- SQLite pipeline state machine with per-stage failure surfacing
-- Native Windows desktop app (Flutter) with a self-configuring, first-run-aware backend
-- Cron automation with lockfile concurrency control
-- Zero-config clone-to-run setup
+**Энэ project-оор харуулсан ур чадварууд:**
 
-**Contact: tuvshin.org@gmail.com**
+* Олон provider бүхий AI orchestration (local llama.cpp/Flux, OpenAI APIs, Codex CLI)-ийг нэг interface-ийн ард удирдах
+* String heuristic биш бодит language identification (fastText) ашиглан scene бүрийн voice/model сонголтыг удирдах
+* HuggingFace diffusers + Flux image generation болон `transformers`-д суурилсан ASR fine-tune integration
+* FFmpeg media processing pipeline (clips, subtitles, transitions, audio mixing)
+* Word-level subtitle alignment-д Whisper speech-to-text ашиглах
+* YouTube Data API v3 + OAuth2
+* SQLite pipeline state machine болон үе шат бүрийн failure surfacing
+* Self-configuring, first-run-aware backend бүхий native Windows desktop app (Flutter)
+* Lockfile concurrency control бүхий cron automation
+* Zero-config clone-to-run setup
+
+**Холбоо барих: [tuvshin.org@gmail.com](mailto:tuvshin.org@gmail.com)**
 
 ---
 
 ## License
 
-MIT License — see LICENSE for details.
+MIT License — LICENSE файлыг харна уу.

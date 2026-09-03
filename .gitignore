@@ -30,6 +30,7 @@ __pycache__/
 .Python
 env/
 venv/
+.build_venv/
 .env
 
 # PyInstaller build output for backend.exe (backend.spec stays tracked)

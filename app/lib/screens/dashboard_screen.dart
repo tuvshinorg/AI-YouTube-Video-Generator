@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api_client.dart';
 import '../settings_dialog.dart';
@@ -34,6 +35,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _pipelineStatus;
   Map<String, dynamic>? _queue;
   Map<String, dynamic>? _codexStatus;
+  Map<String, dynamic>? _setupStatus;
+  bool _setupBusy = false;
   List<dynamic> _videos = [];
   String? _error;
   bool _busy = false;
@@ -47,8 +50,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _refreshStatusAndQueue();
+    _refreshSetupStatus();
     _queueTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshStatusAndQueue(silent: true));
     _connectWebSocket();
+  }
+
+  // Checked once at launch (not on the 5s poll — it spawns a subprocess to
+  // probe installed packages, worth ~1s but not worth paying repeatedly)
+  // plus on demand from the banner's "Recheck" button.
+  Future<void> _refreshSetupStatus() async {
+    setState(() => _setupBusy = true);
+    try {
+      final setup = await _api.getSetupStatus();
+      if (mounted) setState(() => _setupStatus = setup);
+    } catch (_) {
+      // Best-effort — the existing "cannot reach backend" error screen
+      // already covers a backend that isn't up at all.
+    } finally {
+      if (mounted) setState(() => _setupBusy = false);
+    }
   }
 
   @override
@@ -335,6 +355,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         .where((s) => s['stage'] != 'error' && s['stage'] != 'uploaded' && !finishedSeedIds.contains(s['seedId']))
         .toList();
     final codexNotLoggedIn = _codexStatus?['ai_provider'] == 'codex' && _codexStatus?['logged_in'] == false;
+    // null while the check is still in flight — don't flash the banner
+    // before we actually know.
+    final packagesNotReady = _setupStatus != null && _setupStatus?['packages_ready'] == false;
+    final baseDir = _status?['base_dir'] as String?;
     final finishedToday = _finishedToday;
 
     return RefreshIndicator(
@@ -355,6 +379,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 16),
+          if (packagesNotReady) ...[
+            Card(
+              color: AppColors.accentRed.withValues(alpha: 0.10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.warning_amber, color: AppColors.accentRed),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text("Python dependencies aren't installed yet", style: TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'The pipeline (image/voice/subtitle generation) needs these before anything will work. Run this once:',
+                      style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(color: AppColors.panelBgAlt, borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        children: [
+                          Expanded(child: SelectableText('pip install -r requirements.txt', style: consoleStyle(size: 12))),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 16),
+                            tooltip: 'Copy command',
+                            onPressed: () {
+                              Clipboard.setData(const ClipboardData(text: 'pip install -r requirements.txt'));
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Command copied')));
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (baseDir != null) ...[
+                      const SizedBox(height: 6),
+                      Text('Run it from: $baseDir', style: telemetryStyle(size: 11)),
+                    ],
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: _setupBusy ? null : _refreshSetupStatus,
+                        icon: _setupBusy
+                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.refresh, size: 16),
+                        label: const Text("I've installed it — Recheck"),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           if (codexNotLoggedIn) ...[
             Card(
               color: AppColors.accentRed.withValues(alpha: 0.10),

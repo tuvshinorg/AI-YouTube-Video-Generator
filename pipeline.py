@@ -30,8 +30,21 @@ try:
 except ImportError:
     pass
 
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Onedir PyInstaller build (see pipeline.spec): __file__ points inside the
+# bundle's internal support directory, not the real project folder — same
+# problem api.py solves for backend.exe, and the same fix, since pipeline.py
+# is meant to be run as pipeline.exe, sitting next to backend.exe. Detected
+# separately from api.py's IS_FROZEN because this is a different frozen
+# process with its own sys.executable.
+if getattr(sys, "frozen", False):
+    _SCRIPT_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR    = os.getenv("BASE_DIR") or _SCRIPT_DIR
+# Exported so modules/config.py (which resolves BASE_DIR itself, from its
+# own __file__ — meaningless once frozen) picks up the same value instead
+# of independently re-deriving a bundle-internal path.
+os.environ["BASE_DIR"] = BASE_DIR
 DB_PATH     = os.path.join(BASE_DIR, "main.db")
 LOCK_FILE   = os.path.join(BASE_DIR, "pipeline.lock")
 

@@ -82,8 +82,31 @@ FINAL_DIR = os.path.join(BASE_DIR, "final")
 # Inside a PyInstaller-frozen backend.exe, sys.executable IS the exe itself,
 # not a real Python interpreter — running pipeline.py through it would fail.
 # PYTHON_EXECUTABLE (.env) must point at a real interpreter with this
-# project's dependencies installed when frozen.
+# project's dependencies installed when frozen — UNLESS a self-contained
+# release also bundled pipeline.exe (see pipeline.spec / _BUNDLED_PIPELINE_EXE
+# below), in which case that's used instead and no separate Python is needed
+# at all for the Codex-only path.
 PYTHON = os.getenv("PYTHON_EXECUTABLE") if IS_FROZEN else sys.executable
+
+# A fully self-contained release places pipeline.exe (built from
+# pipeline.spec — pipeline.py + modules/, CPU-only torch, no llama_cpp/
+# diffusers) in a "pipeline" folder next to backend.exe itself.
+_BUNDLED_PIPELINE_EXE = (
+    os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "pipeline", "pipeline.exe")
+    if IS_FROZEN else None
+)
+
+
+def _pipeline_command(output: str) -> list:
+    if _BUNDLED_PIPELINE_EXE and os.path.exists(_BUNDLED_PIPELINE_EXE):
+        return [_BUNDLED_PIPELINE_EXE, "--output", output]
+    return [PYTHON, os.path.join(BASE_DIR, "pipeline.py"), "--output", output]
+
+
+def _pipeline_runnable() -> bool:
+    if _BUNDLED_PIPELINE_EXE and os.path.exists(_BUNDLED_PIPELINE_EXE):
+        return True
+    return bool(PYTHON and os.path.exists(PYTHON))
 
 # "llama" (default) or "codex" — see modules/config.py and
 # modules/codex_provider.py for where this actually changes pipeline
@@ -92,6 +115,7 @@ PYTHON = os.getenv("PYTHON_EXECUTABLE") if IS_FROZEN else sys.executable
 # modules.config would re-run its own logging.basicConfig() and clash with
 # this file's independent logging setup.
 AI_PROVIDER = os.getenv("AI_PROVIDER", "llama").lower()
+IMAGE_PROVIDER = os.getenv("IMAGE_PROVIDER", "flux").lower()
 CODEX_BIN = shutil.which("codex") or "codex"
 
 _STAGE_ORDER = [
@@ -143,6 +167,121 @@ logging.basicConfig(
     handlers=[_stream_handler, _file_handler],
 )
 log = logging.getLogger("api")
+
+
+# ── First-run self-configuration ──────────────────────────────────────────────
+# So a fresh checkout (or downloaded release) doesn't need setup.sh run by
+# hand before the app is even usable: create runtime directories, seed .env
+# from .env.example, and initialize the database — mirrors setup.sh's steps
+# 1, 2 and 4. What's left (installing Python packages, logging into Codex)
+# still needs an explicit, visible action — see /api/setup/status below,
+# which the app checks on launch instead of failing silently mid-pipeline.
+_RUNTIME_DIRS = [
+    "logs", "models", "final",
+    "temp/audio", "temp/clip", "temp/codex", "temp/image", "temp/mix",
+    "temp/subtitle", "temp/temp", "temp/video", "temp/voice",
+    "song/bright", "song/calm", "song/dark", "song/dramatic", "song/funky",
+    "song/happy", "song/inspirational", "song/sad",
+    "optic",
+]
+
+
+def _ensure_runtime_ready():
+    for d in _RUNTIME_DIRS:
+        os.makedirs(os.path.join(BASE_DIR, d), exist_ok=True)
+
+    env_path = os.path.join(BASE_DIR, ".env")
+    example_path = os.path.join(BASE_DIR, ".env.example")
+    if not os.path.exists(env_path) and os.path.exists(example_path):
+        shutil.copyfile(example_path, env_path)
+        log.info(f"[setup] Created .env from .env.example at {env_path}")
+
+    if not os.path.exists(DB_PATH):
+        log.info("[setup] main.db not found — initializing database…")
+        try:
+            _init_database()
+            log.info("[setup] Database ready")
+        except Exception as e:
+            log.error(f"[setup] Database init failed: {e}")
+
+
+def _init_database():
+    """Same schema as create.py, run inline rather than shelled out to a
+    separate script — a fully self-contained release has no Python to run
+    create.py with at all (pipeline.exe bundles the interpreter, but only
+    for pipeline.py; api.py already has sqlite3 imported regardless of
+    whether it's frozen)."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("""CREATE TABLE QUEUE (
+        queueId INTEGER PRIMARY KEY AUTOINCREMENT,
+        queueGroup TEXT NOT NULL,
+        queueText TEXT NOT NULL,
+        queueStamp TIMESTAMP
+    )""")
+    conn.execute("""CREATE TABLE TASK (
+        taskId INTEGER PRIMARY KEY AUTOINCREMENT,
+        seedId INT NOT NULL,
+        sceneNumber INT NOT NULL,
+        sceneImageDate TIMESTAMP,
+        sceneAudioDate TIMESTAMP,
+        sceneClipDate TIMESTAMP,
+        sceneSubtitleDate TIMESTAMP
+    )""")
+    conn.execute("""CREATE TABLE SCENE (
+        sceneId INTEGER PRIMARY KEY AUTOINCREMENT,
+        seedId INT NOT NULL,
+        sceneNumber INT NOT NULL,
+        sceneImage TEXT NOT NULL,
+        sceneText TEXT NOT NULL,
+        sceneCreatedDate TIMESTAMP
+    )""")
+    conn.execute("""CREATE TABLE SEED (
+        seedId INTEGER PRIMARY KEY AUTOINCREMENT,
+        queueId INT NOT NULL,
+        seedPrompt TEXT NOT NULL,
+        seedTitle TEXT NOT NULL,
+        seedDescription TEXT NOT NULL,
+        seedSong TEXT NOT NULL,
+        seedCreatedDate TIMESTAMP,
+        seedTransitionStamp TIMESTAMP,
+        seedMixStamp TIMESTAMP,
+        seedRenderStamp TIMESTAMP,
+        seedUploadStamp TIMESTAMP,
+        seedErrorStep TEXT DEFAULT NULL,
+        seedErrorMsg  TEXT DEFAULT NULL
+    )""")
+    conn.commit()
+    conn.close()
+
+
+_ensure_runtime_ready()
+
+
+_PACKAGES_READY_CHECK = (
+    "import importlib.util as u, sys; "
+    "sys.exit(0 if all(u.find_spec(p) for p in "
+    "('fastapi','edge_tts','whisper','fasttext','transformers')) else 1)"
+)
+
+
+def _python_packages_ready() -> bool:
+    """Best-effort check that PYTHON has this project's key dependencies
+    installed — the thing setup.sh's `pip install -r requirements.txt` step
+    does, and the one part of setup that genuinely can't be done from
+    inside a lightweight backend.exe without knowing which Python the user
+    wants those packages installed into.
+
+    Uses find_spec (locates a module without running it) rather than a real
+    import — actually importing transformers etc. cold takes ~15s, far too
+    slow for a check the app runs on every launch.
+    """
+    if not PYTHON or not os.path.exists(PYTHON):
+        return False
+    try:
+        result = subprocess.run([PYTHON, "-c", _PACKAGES_READY_CHECK], capture_output=True, timeout=10)
+        return result.returncode == 0
+    except Exception:
+        return False
 
 
 # ── Watchdog: exit if the frontend goes silent for 60s ────────────────────────
@@ -235,7 +374,10 @@ async def _unhandled_exception_handler(request: Request, exc: Exception):
 
 def _db() -> sqlite3.Connection:
     if not os.path.exists(DB_PATH):
-        raise HTTPException(500, f"Database not found: {DB_PATH}. Run setup.sh first.")
+        # _ensure_runtime_ready() already tries this at startup — reaching
+        # here means that failed (e.g. PYTHON isn't configured in a frozen
+        # build) rather than this being the normal first-run path.
+        raise HTTPException(500, f"Database not found: {DB_PATH}, and auto-initializing it at startup failed — see backend logs.")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -460,6 +602,29 @@ def get_status():
     }
 
 
+@app.get("/api/setup/status")
+def setup_status():
+    """Everything the app needs to know to decide whether to show the
+    dashboard or a setup screen — checked once on launch instead of
+    letting the user discover a missing dependency mid-pipeline, minutes
+    into a run."""
+    bundled = bool(_BUNDLED_PIPELINE_EXE and os.path.exists(_BUNDLED_PIPELINE_EXE))
+    python_ok = bundled or bool(PYTHON and os.path.exists(PYTHON))
+    codex_needed = AI_PROVIDER == "codex" or IMAGE_PROVIDER == "codex"
+    codex = _codex_login_status() if codex_needed else {"logged_in": True, "detail": "not used"}
+    return {
+        "db_ready": os.path.exists(DB_PATH),
+        "python_configured": python_ok,
+        "python_path": "bundled pipeline.exe" if bundled else PYTHON,
+        "packages_ready": True if bundled else (_python_packages_ready() if python_ok else False),
+        "ai_provider": AI_PROVIDER,
+        "image_provider": IMAGE_PROVIDER,
+        "codex_needed": codex_needed,
+        "codex_logged_in": codex["logged_in"],
+        "codex_detail": codex["detail"],
+    }
+
+
 @app.get("/api/pipeline/status")
 def pipeline_status():
     return _pipeline_status_payload()
@@ -665,17 +830,25 @@ def run_pipeline(req: RunRequest):
     if _pipeline_running():
         return {"ok": False, "note": f"Pipeline already running (PID {_lock_pid()})"}
 
-    if IS_FROZEN and not (PYTHON and os.path.exists(PYTHON)):
+    if IS_FROZEN and not _pipeline_runnable():
         raise HTTPException(
             500,
-            "PYTHON_EXECUTABLE is not configured or invalid. Set it in .env to the path "
-            "of a real python.exe with this project's dependencies installed.",
+            "PYTHON_EXECUTABLE is not configured or invalid, and no bundled pipeline.exe was "
+            "found. Set PYTHON_EXECUTABLE in .env to a real python.exe with this project's "
+            "dependencies installed.",
         )
 
-    cmd = [PYTHON, os.path.join(BASE_DIR, "pipeline.py"), "--output", req.output]
+    cmd = _pipeline_command(req.output)
+    # Explicit, not left to the child to re-derive: a bundled pipeline.exe
+    # lives in a "pipeline" subfolder (kept separate from backend.exe's own
+    # _internal/ to avoid the two onedir builds colliding), so its own
+    # sys.executable-based fallback would resolve one directory too deep.
+    # api.py already resolved BASE_DIR correctly — just hand it over.
+    child_env = {**os.environ, "BASE_DIR": BASE_DIR}
     proc = subprocess.Popen(
         cmd,
         cwd=BASE_DIR,
+        env=child_env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )

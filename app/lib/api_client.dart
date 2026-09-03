@@ -122,6 +122,8 @@ class ApiClient {
 
   Future<Map<String, dynamic>> getCodexStatus() async => Map<String, dynamic>.from(await _get('/api/codex/status'));
 
+  Future<Map<String, dynamic>> getSetupStatus() async => Map<String, dynamic>.from(await _get('/api/setup/status'));
+
   /// Starts a new Codex device-auth login. NOTE: this immediately
   /// invalidates whatever Codex session was previously logged in, even if
   /// this new one is never completed — only call it when the user has

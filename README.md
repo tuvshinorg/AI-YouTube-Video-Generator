@@ -25,13 +25,28 @@
 
 ## Download
 
-**[⬇ Download the latest Windows release](https://github.com/tuvshinorg/AI-YouTube-Video-Generator/releases/latest)**
+**[⬇ Download the latest Windows release](https://github.com/tuvshinorg/AI-YouTube-Video-Generator/releases/latest)** — two options on the release page:
 
-The release is the desktop app (`ytgen_manager.exe` + a lightweight `backend.exe`)
-plus the full pipeline source it spawns. It still needs Python and one
-`pip install` — see [First Run](#first-run) below, which the app itself
-walks you through with copy-paste commands and status checks, not silent
-failures three steps later.
+- **`AI-YouTube-Video-Generator-Setup-vX.Y.Z.exe`** (recommended) — a normal
+  Windows installer. Run it, click through, get a Start Menu/Desktop
+  shortcut. Installs per-user (no admin/UAC prompt) since the app writes
+  its database and rendered videos directly next to itself.
+- **`AI-YouTube-Video-Generator-Windows-vX.Y.Z.zip`** — the same app as a
+  portable folder; extract anywhere and run `ytgen_manager.exe` directly,
+  no installer.
+
+Either way, this build is **fully self-contained** — `pipeline.exe` bundles
+the entire pipeline (CPU-only torch, transformers, Whisper, fastText), so
+no separate Python install is needed at all for the Codex-only path (see
+[AI Providers](#ai-providers)). The only thing you still need is a Codex
+login, which [First Run](#first-run) below walks you through from inside
+the app.
+
+Building either yourself: `flutter build windows` + `pyinstaller backend.spec`
++ `pyinstaller pipeline.spec` produce the pieces (see [Flutter Manager
+App](#flutter-manager-app)); `iscc installer.iss` (needs [Inno
+Setup](https://jrsoftware.org/isinfo.php)) turns the assembled release
+folder into the installer.
 
 ---
 

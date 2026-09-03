@@ -33,10 +33,13 @@ venv/
 .build_venv/
 .env
 
-# PyInstaller build output for backend.exe (backend.spec stays tracked)
+# PyInstaller build output for backend.exe/pipeline.exe (the .spec files
+# stay tracked) and the compiled Inno Setup installer (installer.iss stays
+# tracked).
 /build/
 /dist/
 app/windows/backend/
+/installer_output/
 
 # IDE files
 .vscode/

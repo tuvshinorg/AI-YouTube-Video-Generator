@@ -21,6 +21,10 @@ def clip_make_for_seed(seed_id: int):
     )
     tasks = cursor.fetchall()
 
+    # One flare per project (seed), not per scene — deterministic on seed_id so
+    # scenes retried in a later run still match the ones already clipped.
+    flare_path = f"{BASE_DIR}/optic/{random.Random(seed_id).randint(1, OPTIC_COUNT)}.mp4"
+
     for task_id, scene_number in tasks:
         cursor.execute(
             "SELECT sceneId FROM scene WHERE seedId=? AND sceneNumber=?",
@@ -39,10 +43,16 @@ def clip_make_for_seed(seed_id: int):
         image_path = f"{BASE_DIR}/temp/image/{scene_id}/image.png"
         audio_path = os.path.join(voice_dir, "audio.mp3")
         video_path = os.path.join(clip_dir, "video.mp4")
-        flare_path = f"{BASE_DIR}/optic/{random.randint(1, OPTIC_COUNT)}.mp4"
 
         if not os.path.exists(image_path):
             log.error(f"[clip] Image not found: {image_path}")
+            # Matches every other stage's pattern (mark_seed_error on
+            # failure) so this surfaces as "needs attention" — without it,
+            # a seed whose image generation never recovers sits here
+            # forever, since sceneClipDate never gets set and nothing else
+            # in this loop raises. Still `continue`s so this seed's other,
+            # already-imaged scenes get clipped.
+            mark_seed_error(seed_id, "clip", f"Scene {scene_number} (task {task_id}): image not found at {image_path}")
             continue
 
         try:
@@ -109,3 +119,4 @@ def run_clip():
             clip_make_for_seed(seed_id)
         except Exception as e:
             log.error(f"[clip] Seed {seed_id} failed: {e}")
+            mark_seed_error(seed_id, "clip", str(e))

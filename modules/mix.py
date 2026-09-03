@@ -106,3 +106,4 @@ def run_mix():
         mix_process_seed(row[0])
     except Exception as e:
         log.error(f"[mix] Seed {row[0]} failed: {e}")
+        mark_seed_error(row[0], "mix", str(e))

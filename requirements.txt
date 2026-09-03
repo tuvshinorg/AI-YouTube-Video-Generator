@@ -2,10 +2,22 @@
 sqlite3-utils
 pydantic
 html2text
+requests
 
 # AI/ML dependencies
+# numpy is pinned explicitly: transformers/scipy need >=1.26.4, and letting
+# it float caused ModuleNotFoundError('numpy.exceptions') the first time
+# anything imported transformers.pipeline on a machine that still had an
+# older numpy satisfying only the (unpinned) older requirement.
+numpy>=1.26.4,<2.7.0
 openai-whisper
 edge-tts
+# Language ID for modules/voice.py + modules/subtitle.py — real classifier
+# (176 languages) instead of a Cyrillic-script guess, which can't tell
+# Mongolian apart from Russian/Ukrainian/Kazakh/etc. `fasttext-wheel` (not
+# `fasttext`) specifically — it ships prebuilt wheels, so it doesn't need a
+# C++ build toolchain on Windows.
+fasttext-wheel
 # llama-cpp-python for local LLM inference (replaces ollama)
 # Install with CUDA support:
 #   CMAKE_ARGS="-DGGML_CUDA=on" pip install llama-cpp-python --no-cache-dir
@@ -14,6 +26,8 @@ edge-tts
 llama-cpp-python
 
 # HuggingFace Flux image generation (replaces Automatic1111/WebUI Forge)
+# Only needed if IMAGE_PROVIDER=flux (default). Not required for
+# IMAGE_PROVIDER=openai, which only needs `requests` above.
 # Install PyTorch separately first: https://pytorch.org/get-started/locally/
 # e.g.: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 torch

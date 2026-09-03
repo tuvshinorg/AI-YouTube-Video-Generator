@@ -3,6 +3,13 @@ from .config import *
 import edge_tts
 
 
+def _pick_voice(text: str) -> str:
+    """Auto-select the Mongolian voice for text actually detected as
+    Mongolian — not just Cyrillic script, which Russian/Ukrainian/Kazakh
+    etc. also are — else TTS_VOICE."""
+    return TTS_VOICE_MN if detect_language(text) == "mn" else TTS_VOICE
+
+
 async def _tts_scene(seed_id: int, task_id: int, scene_number: int, cursor, conn):
     cursor.execute(
         "SELECT sceneId, sceneText FROM scene WHERE seedId=? AND sceneNumber=?",
@@ -15,7 +22,7 @@ async def _tts_scene(seed_id: int, task_id: int, scene_number: int, cursor, conn
     out_dir = f"{BASE_DIR}/temp/voice/{scene_id}"
     os.makedirs(out_dir, exist_ok=True)
     audio_path = os.path.join(out_dir, "audio.mp3")
-    communicate = edge_tts.Communicate(scene_text, TTS_VOICE)
+    communicate = edge_tts.Communicate(scene_text, _pick_voice(scene_text))
     await communicate.save(audio_path)
     cursor.execute(
         "UPDATE task SET sceneAudioDate=datetime('now','localtime') WHERE taskId=?",
@@ -61,3 +68,4 @@ def run_voice():
             asyncio.run(voice_generate_for_seed(seed_id))
         except Exception as e:
             log.error(f"[voice] Seed {seed_id} failed: {e}")
+            mark_seed_error(seed_id, "voice", str(e))

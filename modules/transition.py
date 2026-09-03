@@ -135,5 +135,6 @@ def run_transition():
         conn.commit()
     except Exception as e:
         log.error(f"[transition] Seed {seed_id} failed: {e}")
+        mark_seed_error(seed_id, "transition", str(e))
     finally:
         conn.close()

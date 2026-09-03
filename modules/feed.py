@@ -1,31 +1,6 @@
 from .config import *
 
 
-def _llm_chat(prompt: str, schema: dict | None = None,
-              max_tokens: int = 2048, temperature: float = 0.7) -> str:
-    """Send a chat message and return the raw string reply.
-
-    If *schema* is provided the model is constrained to emit valid JSON
-    matching that JSON-Schema. Routes to Codex CLI or local llama.cpp
-    depending on AI_PROVIDER (modules/config.py).
-    """
-    if AI_PROVIDER == "codex":
-        from .codex_provider import codex_chat
-        return codex_chat(prompt, schema=schema)
-
-    fmt = {"type": "json_object"}
-    if schema:
-        fmt["schema"] = schema          # llama-cpp-python ≥ 0.2.76
-
-    resp = _get_llm().create_chat_completion(
-        messages=[{"role": "user", "content": prompt}],
-        response_format=fmt if schema else None,
-        max_tokens=max_tokens,
-        temperature=temperature,
-    )
-    return resp["choices"][0]["message"]["content"]
-
-
 def feed_get_unprocessed_entry():
     """Return the first queued entry not yet turned into a seed, or None.
 
@@ -78,7 +53,7 @@ IMPORTANT REQUIREMENTS:
 
     while retry < max_retries:
         try:
-            raw = _llm_chat(prompt, schema=SceneList.model_json_schema())
+            raw = llm_chat(prompt, schema=SceneList.model_json_schema())
             data = SceneList.model_validate_json(raw)
             if len(data.scenes) == 6 and sorted(s.scene for s in data.scenes) == list(range(1, 7)):
                 validated = data
@@ -157,7 +132,7 @@ def feed_generate_title_description(entry: dict):
         f"Do not include any text or explanations."
     )
     try:
-        raw    = _llm_chat(prompt, schema=TitleDescriptionResponse.model_json_schema())
+        raw    = llm_chat(prompt, schema=TitleDescriptionResponse.model_json_schema())
         parsed = TitleDescriptionResponse.model_validate_json(raw)
         conn   = sqlite3.connect(DB_PATH)
         conn.execute(
@@ -182,7 +157,7 @@ def feed_choose_song(entry: dict):
             f"I want YouTube video background music from this text '{entry['queueText']}'. "
             f"Choose one of: {' | '.join(genres)}."
         )
-        raw    = _llm_chat(prompt, schema=SongResponse.model_json_schema())
+        raw    = llm_chat(prompt, schema=SongResponse.model_json_schema())
         parsed = SongResponse.model_validate_json(raw)
         if parsed.genre in genres:
             genre = parsed.genre

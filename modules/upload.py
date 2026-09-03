@@ -82,8 +82,14 @@ def run_upload():
     video_path = f"{BASE_DIR}/final/{seed_id}.mp4"
     if not os.path.exists(video_path):
         log.error(f"[upload] File not found: {video_path}")
+        mark_seed_error(seed_id, "upload", f"File not found: {video_path}")
         return
-    vid_id = upload_video_to_youtube(video_path, title, description)
+    try:
+        vid_id = upload_video_to_youtube(video_path, title, description)
+    except Exception as e:
+        log.error(f"[upload] Seed {seed_id} failed: {e}")
+        mark_seed_error(seed_id, "upload", str(e))
+        return
     if vid_id:
         conn2 = sqlite3.connect(DB_PATH)
         conn2.execute(

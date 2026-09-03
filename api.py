@@ -117,6 +117,16 @@ class _RequestIdFilter(logging.Filter):
 LOG_DIR = os.path.join(os.getenv("LOCALAPPDATA", BASE_DIR), "ytgen_manager", "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
+# Windows' console default encoding is cp1252, not UTF-8 — an en-dash,
+# curly quote, or box-drawing character in a log message raises
+# UnicodeEncodeError there and drops the line (see pipeline.py for the same
+# fix; this file's _file_handler below already passes encoding="utf-8").
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except AttributeError:
+    pass
+
 _file_handler = logging.handlers.TimedRotatingFileHandler(
     os.path.join(LOG_DIR, "backend.log"), when="midnight", backupCount=7, encoding="utf-8"
 )
@@ -349,9 +359,30 @@ def _stage_counts() -> dict:
     return counts
 
 
+def _tail_lines(path: str, n: int = 12, max_bytes: int = 8192) -> list:
+    """Last n lines of a log file, without loading the whole thing into memory."""
+    if not os.path.exists(path):
+        return []
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            f.seek(max(0, size - max_bytes))
+            data = f.read()
+        return data.decode("utf-8", errors="replace").splitlines()[-n:]
+    except OSError:
+        return []
+
+
 def _pipeline_status_payload() -> dict:
     running = _pipeline_running()
     counts = _stage_counts()
+    started_at = None
+    if running and os.path.exists(LOCK_FILE):
+        try:
+            started_at = datetime.fromtimestamp(os.path.getmtime(LOCK_FILE)).isoformat(sep=" ", timespec="seconds")
+        except OSError:
+            pass
     if not running:
         stage = "idle"
         percent = 100 if all(v == 0 for v in counts.values()) else 0
@@ -365,7 +396,12 @@ def _pipeline_status_payload() -> dict:
             stage = current
             percent = round(idx / len(_STAGE_ORDER) * 100)
             message = f"{current}: {counts[current]} pending"
-    return {"job_id": "pipeline", "running": running, "pid": _lock_pid(), "stage": stage, "percent": percent, "message": message}
+    return {
+        "job_id": "pipeline", "running": running, "pid": _lock_pid(),
+        "stage": stage, "percent": percent, "message": message,
+        "started_at": started_at,
+        "log_tail": _tail_lines(os.path.join(BASE_DIR, "logs", "pipeline.log")) if running else [],
+    }
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
@@ -484,6 +520,34 @@ def get_queue():
     }
 
 
+@app.get("/api/queue/{queue_id}")
+def get_queue_entry(queue_id: int):
+    conn = _db()
+    row = conn.execute(
+        "SELECT queueId, queueGroup, queueText, queueStamp FROM QUEUE WHERE queueId=?", (queue_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(404, f"Queue entry {queue_id} not found")
+    return dict(row)
+
+
+@app.delete("/api/queue/{queue_id}")
+def delete_queue_entry(queue_id: int):
+    conn = _db()
+    row = conn.execute("SELECT queueId FROM QUEUE WHERE queueId=?", (queue_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, f"Queue entry {queue_id} not found")
+    if conn.execute("SELECT seedId FROM SEED WHERE queueId=?", (queue_id,)).fetchone():
+        conn.close()
+        raise HTTPException(400, "This entry already started a project — delete the project instead")
+    conn.execute("DELETE FROM QUEUE WHERE queueId=?", (queue_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @app.post("/api/text")
 def add_text(req: AddTextRequest):
     text = req.text.strip()
@@ -533,6 +597,63 @@ def retry_seed(seed_id: int):
     conn.commit()
     conn.close()
     return {"ok": True, "seed_id": seed_id}
+
+
+@app.get("/api/seeds/{seed_id}")
+def get_seed_detail(seed_id: int):
+    conn = _db()
+    seed = conn.execute(
+        """SELECT seedId, queueId, seedPrompt, seedTitle, seedDescription, seedSong,
+             seedCreatedDate, seedErrorStep, seedErrorMsg,
+             CASE
+               WHEN seedUploadStamp     != '0000-00-00 00:00:00' THEN 'uploaded'
+               WHEN seedRenderStamp     != '0000-00-00 00:00:00' THEN 'rendered'
+               WHEN seedMixStamp        != '0000-00-00 00:00:00' THEN 'mixed'
+               WHEN seedTransitionStamp != '0000-00-00 00:00:00' THEN 'transitioned'
+               ELSE 'processing'
+             END as stage
+           FROM SEED WHERE seedId=?""",
+        (seed_id,),
+    ).fetchone()
+    if not seed:
+        conn.close()
+        raise HTTPException(404, f"Seed {seed_id} not found")
+    scenes = conn.execute(
+        "SELECT sceneNumber, sceneImage, sceneText FROM SCENE WHERE seedId=? ORDER BY sceneNumber",
+        (seed_id,),
+    ).fetchall()
+    conn.close()
+    result = dict(seed)
+    result["stage"] = "error" if result["seedErrorStep"] else result["stage"]
+    result["scenes"] = [dict(s) for s in scenes]
+    return result
+
+
+@app.delete("/api/seeds/{seed_id}")
+def delete_seed(seed_id: int):
+    """Deletes the project entirely: scenes, tasks, the seed row, the queue
+    entry it came from (so it isn't silently re-queued), and its rendered
+    .mp4 if one exists."""
+    conn = _db()
+    row = conn.execute("SELECT queueId FROM SEED WHERE seedId=?", (seed_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(404, f"Seed {seed_id} not found")
+    queue_id = row["queueId"]
+    conn.execute("DELETE FROM SCENE WHERE seedId=?", (seed_id,))
+    conn.execute("DELETE FROM TASK WHERE seedId=?", (seed_id,))
+    conn.execute("DELETE FROM SEED WHERE seedId=?", (seed_id,))
+    conn.execute("DELETE FROM QUEUE WHERE queueId=?", (queue_id,))
+    conn.commit()
+    conn.close()
+
+    video_path = os.path.join(FINAL_DIR, f"{seed_id}.mp4")
+    if os.path.exists(video_path):
+        try:
+            os.remove(video_path)
+        except OSError:
+            pass
+    return {"ok": True}
 
 
 # ── Pipeline control ────────────────────────────────────────────────────────────

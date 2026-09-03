@@ -37,12 +37,24 @@ LOCK_FILE   = os.path.join(BASE_DIR, "pipeline.lock")
 
 # ── Logging (before module imports so every module shares this config) ────────
 os.makedirs(os.path.join(BASE_DIR, "logs"), exist_ok=True)
+
+# Windows' console/file default encoding is the legacy cp1252 codepage, not
+# UTF-8 — any en-dash, curly quote, or box-drawing character (all over this
+# codebase's log messages) either gets silently mangled into "�" or, if it
+# has no cp1252 mapping at all (e.g. "═"), throws UnicodeEncodeError and
+# drops the whole log line. Force UTF-8 on both sinks instead.
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except AttributeError:
+    pass  # stdout/stderr isn't a real reconfigurable stream — best effort
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s – %(message)s",
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler(os.path.join(BASE_DIR, "logs", "pipeline.log")),
+        logging.FileHandler(os.path.join(BASE_DIR, "logs", "pipeline.log"), encoding="utf-8"),
     ],
 )
 log = logging.getLogger("pipeline")

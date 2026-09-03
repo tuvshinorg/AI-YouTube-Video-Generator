@@ -68,6 +68,27 @@ def _write_ass(subtitles: list, path: str):
                     f.write(f"Dialogue: 1,{ws},{we},Highlight,,0,0,0,,{pre}{hl}{post}\n")
 
 
+def _transcribe_words(audio_path: str, mongolian: bool) -> list:
+    """One flat list of {"word","start","end"} dicts, normalized over the
+    two backends' very different native shapes:
+
+    - Generic (get_whisper(), openai-whisper): {"segments": [{"words": [...]}]}
+    - Mongolian fine-tune (get_whisper_mn(), a `transformers` pipeline):
+      {"chunks": [{"text": ..., "timestamp": (start, end)}]}
+    """
+    if mongolian:
+        result = get_whisper_mn()(audio_path, return_timestamps="word")
+        return [
+            {"word": c["text"].strip(), "start": c["timestamp"][0], "end": c["timestamp"][1]}
+            for c in result["chunks"]
+        ]
+    result = get_whisper().transcribe(audio_path, word_timestamps=True)
+    return [
+        {"word": w["word"].strip(), "start": w["start"], "end": w["end"]}
+        for seg in result["segments"] for w in seg["words"]
+    ]
+
+
 def subtitle_process_task(task_id: int):
     video_in   = f"{BASE_DIR}/temp/clip/{task_id}/video.mp4"
     sub_dir    = f"{BASE_DIR}/temp/subtitle/{task_id}"
@@ -76,6 +97,21 @@ def subtitle_process_task(task_id: int):
     ass_path   = os.path.join(sub_dir, "subtitles.ass")
     video_out  = os.path.join(sub_dir, "video.mp4")
 
+    # Same signal modules/voice.py already uses to pick the TTS voice — a
+    # scene narrated in Mongolian should also be transcribed with the
+    # Mongolian-finetuned model, not the generic multilingual one. Real
+    # language ID, not a Cyrillic-script guess: Russian/Ukrainian/Kazakh
+    # etc. are Cyrillic too, and none of them are Mongolian.
+    conn = sqlite3.connect(DB_PATH)
+    row = conn.execute(
+        """SELECT s.sceneText FROM task t
+           JOIN scene s ON s.seedId = t.seedId AND s.sceneNumber = t.sceneNumber
+           WHERE t.taskId=?""",
+        (task_id,),
+    ).fetchone()
+    conn.close()
+    mongolian = bool(row) and detect_language(row[0]) == "mn"
+
     # Extract audio
     subprocess.run(
         ["ffmpeg", "-i", video_in, "-vn", "-acodec", "libmp3lame", "-q:a", "2", audio_tmp, "-y"],
@@ -83,20 +119,20 @@ def subtitle_process_task(task_id: int):
     )
 
     # Transcribe (model loaded once and cached for the whole process)
-    result = _get_whisper().transcribe(audio_tmp, word_timestamps=True)
-    words = [
-        {"word": w["word"].strip(), "start": w["start"], "end": w["end"]}
-        for seg in result["segments"] for w in seg["words"]
-    ]
+    words = _transcribe_words(audio_tmp, mongolian)
 
     # Build & burn subtitles
     lines = _split_into_lines(words)
     _write_ass(lines, ass_path)
+    # ffmpeg's filtergraph parser splits ass=<path> on ':' and treats '\' as
+    # an escape char, so a raw Windows path (drive-letter colon, backslashes)
+    # gets misparsed there even when escaped — run from sub_dir instead and
+    # reference the file by bare name, which has neither character.
     subprocess.run(
-        ["ffmpeg", "-i", video_in, "-vf", f"ass={ass_path}",
+        ["ffmpeg", "-i", video_in, "-vf", "ass=subtitles.ass",
          "-c:v", "libx264", "-preset", "medium", "-crf", "22",
          "-c:a", "aac", "-b:a", "192k", video_out, "-y"],
-        check=True, capture_output=True,
+        check=True, capture_output=True, cwd=sub_dir,
     )
     log.info(f"[subtitle] Created: {video_out}")
 
@@ -128,3 +164,8 @@ def run_subtitle():
             conn2.close()
         except Exception as e:
             log.error(f"[subtitle] Task {task_id} failed: {e}")
+            conn3 = sqlite3.connect(DB_PATH)
+            row = conn3.execute("SELECT seedId FROM task WHERE taskId=?", (task_id,)).fetchone()
+            conn3.close()
+            if row:
+                mark_seed_error(row[0], "subtitle", str(e))

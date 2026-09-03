@@ -18,6 +18,10 @@ temp/
 final/
 logs/
 
+# Downloaded/generated models (Llama GGUF, fastText lid.176, etc.) — fetched
+# automatically or via a documented manual step, never committed.
+models/
+
 # Python cache
 __pycache__/
 *.pyc

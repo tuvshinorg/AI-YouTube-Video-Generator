@@ -62,7 +62,13 @@ def run_final():
         log.info("[final] No pending seeds")
         return
     seed_id = row[0]
-    if final_merge(seed_id):
+    try:
+        ok = final_merge(seed_id)
+    except Exception as e:
+        log.error(f"[final] Seed {seed_id} failed: {e}")
+        mark_seed_error(seed_id, "final", str(e))
+        return
+    if ok:
         conn2 = sqlite3.connect(DB_PATH)
         conn2.execute(
             "UPDATE seed SET seedRenderStamp=CURRENT_TIMESTAMP WHERE seedId=?",
@@ -70,3 +76,5 @@ def run_final():
         )
         conn2.commit()
         conn2.close()
+    else:
+        mark_seed_error(seed_id, "final", "Merge failed — see logs/pipeline.log for details")
